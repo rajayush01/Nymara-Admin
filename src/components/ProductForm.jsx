@@ -219,10 +219,15 @@ if (!response.ok) throw new Error(resData.message || "Failed to add product");
         {/* Header */}
         <div className="bg-gradient-to-r from-yellow-500 to-amber-600 px-6 py-4 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-white">✨ Add New Product</h2>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white/20 px-3 py-1 rounded-lg"
-          >
+            <h2 className="text-2xl font-bold text-white">✨ Add New Product</h2>
+         <button
+  type="button"
+  onClick={() => {
+    if (onClose) onClose();
+    else console.warn("⚠️ onClose not passed to ProductForm");
+  }}
+  className="text-white hover:bg-white/20 px-3 py-1 rounded-lg"
+>
             ❌
           </button>
         </div>
