@@ -32,7 +32,7 @@ export default function Products() {
               ✖
             </button>
 
-            <ProductForm />
+            <ProductForm onClose={() => setShowForm(false)} />
           </div>
         </div>
       )}
