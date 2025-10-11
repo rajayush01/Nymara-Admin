@@ -28,6 +28,14 @@ const mockSummary = {
     { date: "2025-09-06", visits: 35, purchases: 9 },
     { date: "2025-09-07", visits: 50, purchases: 15 },
   ],
+
+  countryStats: [
+    { country: "India", visits: 75 },
+    { country: "USA", visits: 20 },
+    { country: "UK", visits: 10 },
+    { country: "Canada", visits: 8 },
+    { country: "Germany", visits: 7 },
+  ],
 };
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -46,7 +54,16 @@ export default function Analytics() {
       })
       .then((res) => {
         if (res.data?.summary) {
-          setData({ ...res.data.summary, dailyStats: mockSummary.dailyStats });
+           setData({
+  ...res.data.summary,
+  dailyStats: res.data.summary.dailyStats?.length
+    ? res.data.summary.dailyStats
+    : mockSummary.dailyStats,
+  countryStats: res.data.summary.countryStats?.length
+    ? res.data.summary.countryStats
+    : mockSummary.countryStats,
+});
+
         } else {
           setData(mockSummary);
         }
@@ -134,6 +151,23 @@ export default function Analytics() {
           <p className="text-gray-500">No product data yet</p>
         )}
       </div>
+
+      <div className="bg-white rounded-xl shadow-md p-6 mt-8">
+  <h3 className="text-lg font-semibold mb-4">🌍 Visitors by Country</h3>
+  {data.countryStats && data.countryStats.length > 0 ? (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data.countryStats}>
+        <XAxis dataKey="country" />
+        <YAxis />
+        <Tooltip />
+        <Bar dataKey="visits" fill="#60a5fa" name="Visits" />
+      </BarChart>
+    </ResponsiveContainer>
+  ) : (
+    <p className="text-gray-500">No location data yet</p>
+  )}
+</div>
+
     </div>
   );
 }
