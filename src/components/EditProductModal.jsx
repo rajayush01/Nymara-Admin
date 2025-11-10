@@ -21,15 +21,18 @@ const CURRENCY_LIST = [
   { code: "GBP", symbol: "£", flag: "🇬🇧" },
   { code: "CAD", symbol: "CA$", flag: "🇨🇦" },
   { code: "EUR", symbol: "€", flag: "🇪🇺" },
+  { code: "AED", symbol: "د.إ", flag: "🇦🇪", country: "United Arab Emirates" },
+  { code: "AUD", symbol: "A$", flag: "🇦🇺", country: "Australia" },
+  { code: "SGD", symbol: "S$", flag: "🇸🇬", country: "Singapore" },
+  { code: "JPY", symbol: "¥", flag: "🇯🇵", country: "Japan" },
+  
 ];
-
-const API_URL = import.meta.env.VITE_API_URL;
-
 
 export default function EditProductModal({ product, onClose, onSave }) {
   const [formData, setFormData] = useState(product || {});
   const [prices, setPrices] = useState(product?.prices || {});
   const [isSaving, setIsSaving] = useState(false);
+   const [makingChargesByCountry, setMakingChargesByCountry] = useState(product?.makingChargesByCountry || {});
 
   useEffect(() => {
     setFormData(product || {});
@@ -90,7 +93,7 @@ export default function EditProductModal({ product, onClose, onSave }) {
       const token = localStorage.getItem("token");
 
       await axios.put(
-        `${API_URL}/api/ornaments/edit/${product._id}`,
+        `http://localhost:5000/api/ornaments/edit/${product._id}`,
         payload,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -223,6 +226,24 @@ export default function EditProductModal({ product, onClose, onSave }) {
                     value={prices[code]?.amount || ""}
                     onChange={(e) => handlePriceChange(code, symbol, e.target.value)}
                     placeholder={`Price in ${code}`}
+                    className="flex-1 border p-2 rounded"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="font-semibold">⚒️ Making Charges by Country</label>
+            <div className="space-y-2 mt-2">
+              {CURRENCY_LIST.map(({ code, symbol, flag }) => (
+                <div key={code} className="flex items-center gap-2">
+                  <span className="w-28 flex items-center gap-1">{flag} {code}</span>
+                  <input
+                    type="number"
+                    value={makingChargesByCountry[code]?.amount || ""}
+                    onChange={(e) => handleMakingChargeChange(code, symbol, e.target.value)}
+                    placeholder={`Making charge in ${code}`}
                     className="flex-1 border p-2 rounded"
                   />
                 </div>

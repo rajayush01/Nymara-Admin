@@ -1,31 +1,38 @@
 import { useState, useEffect } from "react";
 
 export default function PricingPage() {
-  const [goldPrice, setGoldPrice] = useState("");
+  const [goldPrices, setGoldPrices] = useState({ "14K": "", "18K": "", "22K": "" });
   const [diamondPrice, setDiamondPrice] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-
   const [currentPricing, setCurrentPricing] = useState(null);
   const [loadingPricing, setLoadingPricing] = useState(true);
-const API_URL = import.meta.env.VITE_API_URL;
 
-  const API_BASE = `${API_URL}/api/ornaments/pricing`;
+  const API_BASE = "http://localhost:5000/api/ornaments/pricing";
 
   // 🔹 Fetch current pricing on load
   useEffect(() => {
     const fetchPricing = async () => {
       try {
         const response = await fetch(API_BASE, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
-
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Failed to fetch pricing");
 
-        setCurrentPricing(data);
+        setCurrentPricing(data.pricing || data);
+
+        // ✅ Initialize gold prices if available
+        if (data.pricing?.goldPrices) {
+          setGoldPrices({
+            "14K": data.pricing.goldPrices["14K"] || "",
+            "18K": data.pricing.goldPrices["18K"] || "",
+            "22K": data.pricing.goldPrices["22K"] || "",
+          });
+        }
+
+        if (data.pricing?.diamondPricePerCarat)
+          setDiamondPrice(data.pricing.diamondPricePerCarat);
       } catch (err) {
         console.error("Fetch Pricing Error:", err);
       } finally {
@@ -36,31 +43,40 @@ const API_URL = import.meta.env.VITE_API_URL;
     fetchPricing();
   }, []);
 
+  // 🟡 Update goldPrices state
+  const handleGoldChange = (karat, value) => {
+    setGoldPrices((prev) => ({ ...prev, [karat]: value }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
 
     try {
-      const response = await fetch(`${API_BASE}`, {
+      const payload = {
+        goldPrices: {
+          "14K": goldPrices["14K"] ? Number(goldPrices["14K"]) : undefined,
+          "18K": goldPrices["18K"] ? Number(goldPrices["18K"]) : undefined,
+          "22K": goldPrices["22K"] ? Number(goldPrices["22K"]) : undefined,
+        },
+        diamondPricePerCarat: diamondPrice ? Number(diamondPrice) : undefined,
+      };
+
+      const response = await fetch(API_BASE, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`, // ✅ added
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({
-          goldPricePerGram: goldPrice ? Number(goldPrice) : undefined,
-          diamondPricePerCarat: diamondPrice ? Number(diamondPrice) : undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to update pricing");
 
       setMessage({ type: "success", text: data.message });
-      setGoldPrice("");
-      setDiamondPrice("");
-      setCurrentPricing(data.pricing); // ✅ update UI with saved pricing
+      setCurrentPricing(data.pricing);
     } catch (err) {
       setMessage({ type: "error", text: err.message });
     } finally {
@@ -79,11 +95,15 @@ const API_URL = import.meta.env.VITE_API_URL;
             <p className="text-gray-500">Loading current pricing...</p>
           ) : currentPricing ? (
             <div className="space-y-2">
-              <p className="text-gray-700">
-                <span className="font-semibold">Gold Price per Gram:</span>{" "}
-                ₹{currentPricing.goldPricePerGram}
-              </p>
-              <p className="text-gray-700">
+              <p className="text-gray-700 font-semibold">Current Gold Prices (per gram):</p>
+              <ul className="list-disc pl-5 text-gray-700">
+                {Object.entries(currentPricing.goldPrices || {}).map(([karat, price]) => (
+                  <li key={karat}>
+                    {karat}: ₹{price}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-gray-700 mt-3">
                 <span className="font-semibold">Diamond Price per Carat:</span>{" "}
                 ₹{currentPricing.diamondPricePerCarat}
               </p>
@@ -107,18 +127,25 @@ const API_URL = import.meta.env.VITE_API_URL;
 
         {/* Update Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Gold Price */}
+          {/* Gold Prices for Each Karat */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Gold Price per Gram (₹)
+              Gold Prices per Gram (₹)
             </label>
-            <input
-              type="number"
-              value={goldPrice}
-              onChange={(e) => setGoldPrice(e.target.value)}
-              className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 outline-none"
-              placeholder="Enter gold price per gram"
-            />
+            <div className="space-y-3">
+              {["14K", "18K", "22K"].map((karat) => (
+                <div key={karat} className="flex items-center gap-3">
+                  <span className="w-16 font-semibold">{karat}</span>
+                  <input
+                    type="number"
+                    value={goldPrices[karat]}
+                    onChange={(e) => handleGoldChange(karat, e.target.value)}
+                    className="flex-1 px-4 py-3 border-2 rounded-xl focus:border-yellow-500 outline-none"
+                    placeholder={`Enter ${karat} gold price`}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Diamond Price */}

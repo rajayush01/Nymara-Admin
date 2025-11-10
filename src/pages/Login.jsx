@@ -3,8 +3,6 @@ import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
@@ -23,7 +21,7 @@ export default function Login() {
 
     try {
       const res = await axios.post(
-        `${API_URL}/api/auth/login`,
+        "http://localhost:5000/api/auth/login",
         form
       );
 
@@ -33,7 +31,7 @@ export default function Login() {
 
       // Redirect based on isAdmin
       if (res.data.user.isAdmin) {
-        navigate("/admin");
+        navigate("/admin/dashboard");
       } else {
         navigate("/"); // normal user home
       }

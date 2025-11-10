@@ -30,6 +30,10 @@ const CURRENCY_OPTIONS = [
   { code: "GBP", symbol: "£" },
   { code: "CAD", symbol: "CA$" },
   { code: "EUR", symbol: "€" },
+  { code: "AED", symbol: "د.إ" },    // 🇦🇪 UAE Dirham
+  { code: "AUD", symbol: "A$" },     // 🇦🇺 Australian Dollar
+  { code: "SGD", symbol: "S$" },     // 🇸🇬 Singapore Dollar
+  { code: "JPY", symbol: "¥" },
 ];
 
 export default function ProductList() {
@@ -38,7 +42,7 @@ export default function ProductList() {
   const [viewingProductId, setViewingProductId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
-const [totalPages, setTotalPages] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
 
   // Filters
@@ -51,55 +55,86 @@ const [totalPages, setTotalPages] = useState(1);
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState("");
   const [currency, setCurrency] = useState("INR"); // ✅ currency state
-const API_URL = import.meta.env.VITE_API_URL;
 
   const fetchProducts = async () => {
-  setLoading(true);
-  try {
-    const params = {
-      search,
-      category,
-      type,
-      subCategory,
-      gender,
-      minPrice,
-      maxPrice,
-      sort,
-      currency, // ✅ pass currency
-      page,
-      limit: 8,
-    };
+    setLoading(true);
+    try {
+      const params = {
+        search,
+        category,
+        type,
+        subCategory,
+        gender,
+        minPrice,
+        maxPrice,
+        sort,
+        currency, // ✅ pass currency
+        page,
+        limit: 8,
+      };
 
-    const token = localStorage.getItem("token"); // ✅ get token
+      const token = localStorage.getItem("token"); // ✅ get token
 
-    const res = await axios.get(`${API_URL}/api/ornaments/`, {
-      params,
-      headers: {
-        Authorization: `Bearer ${token}`, // ✅ attach token
-      },
-    });
+      // --- FIX: Correct template literal usage for Authorization header ---
+      const res = await axios.get("http://localhost:5000/api/ornaments/", {
+        params,
+        headers: {
+          Authorization: `Bearer ${token}`, // ✅ Corrected template literal
+        },
+      });
+      // --------------------------------------------------------------------
 
-    setProducts(res.data.ornaments || []);
-    setTotalPages(res.data.totalPages || 1);
-  } catch (err) {
-    console.error("Fetch Products Error:", err.response?.data || err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+      setProducts(res.data.ornaments || []);
+      setTotalPages(res.data.totalPages || 1);
+    } catch (err) {
+      console.error("Fetch Products Error:", err.response?.data || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   useEffect(() => {
+    // If any filter changes, reset to page 1
+    const shouldResetPage = page !== 1 && (
+        search || category || subCategory || type || gender || minPrice || maxPrice || sort || currency
+    );
+
+    if (shouldResetPage) {
+        setPage(1);
+    } else {
+        fetchProducts();
+    }
+  }, [search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency, page]);
+
+  // If a filter changes, we want to call fetchProducts, but only *after* page resets to 1.
+  // We use a separate useEffect to handle the reset, and let the main useEffect handle the fetch.
+  // This helps avoid double-fetching when a filter changes.
+  useEffect(() => {
+    // This effect is specifically for filter changes (excluding 'page' and 'currency')
+    // and resetting the page if needed, which then triggers the main effect.
+    if (page !== 1) {
+        setPage(1);
+    } else {
+        fetchProducts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency]);
+  
+  useEffect(() => {
     fetchProducts();
-  }, [search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency,page]);
+  }, [page]); // Only refetch when page changes, as other filters are handled above.
+
 
   const deleteProduct = async (id) => {
     if (!window.confirm("Are you sure you want to delete this product?")) return;
 
     try {
-      await axios.delete(`${API_URL}/api/ornaments/delete/${id}`, {
+      // --- FIX: Correct template literal usage for URL and Authorization header ---
+      await axios.delete(`http://localhost:5000/api/ornaments/delete/${id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
+      // --------------------------------------------------------------------
       fetchProducts();
     } catch (err) {
       console.error("Delete Product Error:", err.response?.data || err.message);
@@ -143,10 +178,10 @@ const API_URL = import.meta.env.VITE_API_URL;
           value={subCategory}
           onChange={(e) => setSubCategory(e.target.value)}
           className="border p-2 rounded"
-          disabled={!type}
+          disabled={!type || !SUBCATEGORY_MAP[type]} // Check if type is set and exists in map
         >
           <option value="">All Subcategories</option>
-          {type && SUBCATEGORY_MAP[type].map((sub) => (
+          {type && SUBCATEGORY_MAP[type] && SUBCATEGORY_MAP[type].map((sub) => (
             <option key={sub} value={sub}>{sub}</option>
           ))}
         </select>
@@ -205,7 +240,7 @@ const API_URL = import.meta.env.VITE_API_URL;
             >
               {p.coverImage || (p.images && p.images.length > 0) ? (
                 <img
-                  src={p.coverImage || p.images[0]}
+                  src={p.coverImage || (p.images && p.images[0])}
                   alt={p.name}
                   className="h-40 w-full object-cover"
                 />
@@ -215,42 +250,38 @@ const API_URL = import.meta.env.VITE_API_URL;
                 </div>
               )}
 
-              {/* 🏷️ Discount Badge */}
-  
-
               <div className="p-4 flex-1 flex flex-col justify-between">
                 <div>
                   <h3 className="font-semibold text-lg">{p.name}</h3>
-                  {/* ✅ FIX: displayPrice + currency */}
-                 {/* ✅ Updated price display with originalPrice + discount */}
-<div className="mt-1">
-  <span className="text-gray-800 font-semibold text-lg">
-    {p.currency}{p.displayPrice?.toLocaleString()}
-  </span>
+                  {/* ✅ Updated price display with originalPrice + discount */}
+                  <div className="mt-1">
+                    <span className="text-gray-800 font-semibold text-lg">
+                      {p.currency}{p.displayPrice?.toLocaleString()}
+                    </span>
 
-  {p.originalPrice && p.originalPrice > p.displayPrice && (
-    <span className="text-gray-400 line-through ml-2 text-sm">
-      {p.currency}{p.originalPrice?.toLocaleString()}
-    </span>
-  )}
+                    {p.originalPrice && p.originalPrice > p.displayPrice && (
+                      <span className="text-gray-400 line-through ml-2 text-sm">
+                        {p.currency}{p.originalPrice?.toLocaleString()}
+                      </span>
+                    )}
 
-  {p.discount > 0 && (
-    <span className="text-red-500 text-sm font-medium ml-2">
-      ({p.discount}% OFF)
-    </span>
-  )}
-</div>
+                    {p.discount > 0 && (
+                      <span className="text-red-500 text-sm font-medium ml-2">
+                        ({p.discount}% OFF)
+                      </span>
+                    )}
+                  </div>
 
-               <p className="text-sm text-gray-500 mt-1">
-  {[ 
-    Array.isArray(p.category) ? p.category.join(", ") : p.category,
-    p.type,
-    p.gender,
-    Array.isArray(p.subCategory) ? p.subCategory.join(", ") : p.subCategory
-  ]
-    .filter(Boolean)  // remove undefined, null, empty strings
-    .join(" | ")}     
-</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {[ 
+                      Array.isArray(p.category) ? p.category.join(", ") : p.category,
+                      p.type,
+                      p.gender,
+                      Array.isArray(p.subCategory) ? p.subCategory.join(", ") : p.subCategory
+                    ]
+                      .filter(Boolean)  // remove undefined, null, empty strings
+                      .join(" | ")}     
+                  </p>
 
 
                   <p className="text-gray-700 mt-2 line-clamp-2">{p.description}</p>
@@ -284,37 +315,37 @@ const API_URL = import.meta.env.VITE_API_URL;
       )}
 
       {/* Pagination Controls */}
-{!loading && totalPages > 1 && (
-  <div className="flex justify-center items-center gap-2 mt-8">
-    <button
-      disabled={page <= 1}
-      onClick={() => setPage((prev) => prev - 1)}
-      className="px-3 py-2 border rounded disabled:opacity-50"
-    >
-      ◀ Prev
-    </button>
+      {!loading && totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-8">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage((prev) => prev - 1)}
+            className="px-3 py-2 border rounded disabled:opacity-50"
+          >
+            ◀ Prev
+          </button>
 
-    {Array.from({ length: totalPages }, (_, i) => (
-      <button
-        key={i}
-        onClick={() => setPage(i + 1)}
-        className={`px-3 py-2 border rounded ${
-          page === i + 1 ? "bg-yellow-400 text-white font-bold" : "hover:bg-gray-100"
-        }`}
-      >
-        {i + 1}
-      </button>
-    ))}
+          {Array.from({ length: totalPages }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setPage(i + 1)}
+              className={`px-3 py-2 border rounded ${          
+                page === i + 1 ? "bg-yellow-400 text-white font-bold" : "hover:bg-gray-100"
+              }`}      
+            >
+              {i + 1}
+            </button>
+          ))}
 
-    <button
-      disabled={page >= totalPages}
-      onClick={() => setPage((prev) => prev + 1)}
-      className="px-3 py-2 border rounded disabled:opacity-50"
-    >
-      Next ▶
-    </button>
-  </div>
-)}
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage((prev) => prev + 1)}
+            className="px-3 py-2 border rounded disabled:opacity-50"
+          >
+            Next ▶
+          </button>
+        </div>
+      )}
 
 
       {/* Edit Modal */}

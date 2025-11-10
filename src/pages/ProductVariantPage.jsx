@@ -18,7 +18,6 @@ const VARIANT_COLORS = {
   "Silver": "bg-gradient-to-r from-gray-200 via-gray-100 to-gray-400 shadow-inner",
   "Platinum": "bg-gradient-to-r from-gray-300 via-gray-400 to-gray-500 shadow-inner",
 };
-const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ProductVariantPage() {
   const { id } = useParams();
@@ -30,7 +29,7 @@ export default function ProductVariantPage() {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(
-        `${API_URL}/api/ornaments/${id}?currency=${currency}`,
+        `http://localhost:5000/api/ornaments/${id}?currency=${currency}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 

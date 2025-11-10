@@ -9,7 +9,6 @@ const subCategoryOptions = {
   "loose-diamonds": [],
 };
 
-const API_URL = import.meta.env.VITE_API_URL;
 
 const categoryOptions = ["rings", "earrings", "necklaces", "bracelets", "mens", "loose-diamonds"];
 const categoryTypeOptions = ["Gold", "Diamond", "Gemstone", "Fashion"];
@@ -20,6 +19,10 @@ const currencyList = [
   { code: "GBP", symbol: "£", flag: "🇬🇧", country: "United Kingdom" },
   { code: "CAD", symbol: "CA$", flag: "🇨🇦", country: "Canada" },
   { code: "EUR", symbol: "€", flag: "🇪🇺", country: "European Union" },
+   { code: "AED", symbol: "د.إ", flag: "🇦🇪", country: "United Arab Emirates" },
+  { code: "AUD", symbol: "A$", flag: "🇦🇺", country: "Australia" },
+  { code: "SGD", symbol: "S$", flag: "🇸🇬", country: "Singapore" },
+  { code: "JPY", symbol: "¥", flag: "🇯🇵", country: "Japan" },
 ];
 
 const METAL_TYPES = [
@@ -63,6 +66,7 @@ const VARIANT_TYPES = ["Yellow Gold", "White Gold", "Rose Gold", "Silver", "Plat
 export default function ProductForm({ onClose, onSave }) {
   const [formData, setFormData] = useState({
   name: "",
+  type: "rings", 
   category: "rings",         // 🟢 now a simple string, not array
   subCategory: "",            // 🟢 also a string
   categoryType: "Gold",       // 🟢 matches backend field
@@ -82,12 +86,57 @@ export default function ProductForm({ onClose, onSave }) {
   style: "",
   size: "",
   color: "",
+  rating: 0, 
 });
 
 
   const [model3D, setModel3D] = useState(null);
 const [videoFile, setVideoFile] = useState(null);
 const [videoPreview, setVideoPreview] = useState(null);
+const [makingChargesByCountry, setMakingChargesByCountry] = useState({});
+// 🆕 Variant Controls
+
+const [variants, setVariants] = useState([]);
+
+
+
+// 🆕 Variant-specific images
+const [variantCoverImage, setVariantCoverImage] = useState(null);
+const [variantCoverPreview, setVariantCoverPreview] = useState(null);
+const [variantImages, setVariantImages] = useState([]);
+
+
+
+// 💎 NEW: Diamond Details (main)
+const [diamondDetails, setDiamondDetails] = useState({
+  stoneType: "Diamond",
+  creationMethod: "Lab Grown",
+  shape: "",
+  diamondColor: "",
+  color: "",
+  clarity: "",
+  cutGrade: "",
+  count: "",
+  caratWeight: "",
+  totalCaratWeight: "",
+  setting: "",
+});
+
+// 💎 NEW: Side Diamond Details (optional)
+const [sideDiamondDetails, setSideDiamondDetails] = useState({
+  stoneType: "Diamond",
+  creationMethod: "Lab Grown",
+  shape: "",
+  diamondColor: "",
+  color: "",
+  clarity: "",
+  cutGrade: "",
+  count: "",
+  caratWeight: "",
+  totalCaratWeight: "",
+  setting: "",
+});
+
  
 
   const [prices, setPrices] = useState({});
@@ -96,10 +145,10 @@ const [videoPreview, setVideoPreview] = useState(null);
   const [images, setImages] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+
+
   // 🔹 New: hold linked product IDs for each variant
-  const [variantLinks, setVariantLinks] = useState(
-    VARIANT_TYPES.reduce((acc, v) => ({ ...acc, [v]: "" }), {})
-  );
+ 
 
   useEffect(() => {
     const handleEsc = (e) => e.key === "Escape" && onClose?.();
@@ -125,6 +174,17 @@ const [videoPreview, setVideoPreview] = useState(null);
   }
 };
 
+// 💎 NEW: handle changes in diamond detail fields
+const handleDiamondChange = (e, isSide = false) => {
+  const { name, value } = e.target;
+  if (isSide) {
+    setSideDiamondDetails((prev) => ({ ...prev, [name]: value }));
+  } else {
+    setDiamondDetails((prev) => ({ ...prev, [name]: value }));
+  }
+};
+
+
 
   const handlePriceChange = (code, symbol, value) => {
     setPrices((prev) => ({
@@ -132,6 +192,18 @@ const [videoPreview, setVideoPreview] = useState(null);
       [code]: { amount: value ? Number(value) : 0, symbol },
     }));
   };
+
+  const handleMakingChargeChange = (code, symbol, value) => {
+  setMakingChargesByCountry((prev) => ({
+    ...prev,
+    [code]: {
+      amount: value ? Number(value) : 0,
+      currency: code,
+      symbol,
+    },
+  }));
+};
+
 
   const handleCoverImageChange = (e) => {
     const file = e.target.files[0];
@@ -169,6 +241,11 @@ const [videoPreview, setVideoPreview] = useState(null);
         data.append("prices", JSON.stringify(prices));
       }
 
+      if (Object.keys(makingChargesByCountry).length > 0) {
+  data.append("makingChargesByCountry", JSON.stringify(makingChargesByCountry));
+}
+
+
       if (coverImage) data.append("coverImage", coverImage);
       if (images.length > 0) images.forEach((img) => data.append("images", img));
 
@@ -178,10 +255,49 @@ const [videoPreview, setVideoPreview] = useState(null);
     
 
       // ✅ Add variant links (ObjectId refs)
-      data.append("variantLinks", JSON.stringify(variantLinks));
+   
+
+      if (formData.categoryType === "Diamond") {
+  const hasSideDetails = Object.values(sideDiamondDetails).some(
+    (v) => v && v !== ""
+  );
+
+  data.append("diamondDetails", JSON.stringify(diamondDetails));
+  data.append(
+    "sideDiamondDetails",
+    JSON.stringify(hasSideDetails ? sideDiamondDetails : diamondDetails)
+  );
+}// ✅ Add embedded variants
+
+if (variants.length > 0) {
+  const variantData = variants.map((v) => ({
+    color: v.color,
+    metalType: v.metalType,
+    size: v.size,
+  }));
+
+  // Attach structured JSON
+  data.append("variants", JSON.stringify(variantData));
+
+  // Attach each variant’s files under unique keys
+  variants.forEach((v, index) => {
+    if (v.coverImage) {
+      data.append(`variant${index}_cover`, v.coverImage);
+    }
+
+    if (v.images?.length > 0) {
+      v.images.forEach((img) => {
+        data.append(`variant${index}_images`, img);
+      });
+    }
+  });
+}
+
+
+
 
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_URL}/api/ornaments/add`, {
+      const response = await fetch("http://localhost:5000/api/ornaments/add", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: data,
@@ -219,7 +335,6 @@ if (!response.ok) throw new Error(resData.message || "Failed to add product");
         {/* Header */}
         <div className="bg-gradient-to-r from-yellow-500 to-amber-600 px-6 py-4 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-white">✨ Add New Product</h2>
-            <h2 className="text-2xl font-bold text-white">✨ Add New Product</h2>
          <button
   type="button"
   onClick={() => {
@@ -228,8 +343,9 @@ if (!response.ok) throw new Error(resData.message || "Failed to add product");
   }}
   className="text-white hover:bg-white/20 px-3 py-1 rounded-lg"
 >
-            ❌
-          </button>
+  ❌
+</button>
+
         </div>
 
         {/* Body */}
@@ -253,6 +369,94 @@ if (!response.ok) throw new Error(resData.message || "Failed to add product");
             className="mt-3"
           />
 
+          {/* 🧩 Variant Manager */}
+<div className="border border-amber-300 rounded-xl p-4 bg-amber-50 mb-8">
+  <h3 className="font-semibold text-lg mb-3 text-amber-700">🧩 Product Variants</h3>
+
+  {variants.map((variant, index) => (
+    <div key={index} className="border border-gray-300 p-4 rounded-xl mb-4 bg-white">
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="font-semibold text-gray-700">Variant {index + 1}</h4>
+        <button
+          onClick={() => setVariants((prev) => prev.filter((_, i) => i !== index))}
+          className="text-red-600 hover:underline text-sm"
+        >
+          Remove
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {["color", "metalType", "size"].map((field) => (
+          <div key={field}>
+            <label className="text-sm font-medium capitalize">{field}</label>
+            <input
+              type="text"
+              value={variant[field]}
+              onChange={(e) => {
+                const newVariants = [...variants];
+                newVariants[index][field] = e.target.value;
+                setVariants(newVariants);
+              }}
+              className="w-full px-4 py-2 border-2 rounded-xl focus:border-yellow-500"
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Variant Images */}
+      <div className="mt-4">
+        <label className="block text-sm font-medium">Cover Image</label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => {
+            const newVariants = [...variants];
+            newVariants[index].coverImage = e.target.files[0];
+            setVariants(newVariants);
+          }}
+          className="mt-2"
+        />
+        {variant.coverImage && (
+          <img
+            src={URL.createObjectURL(variant.coverImage)}
+            alt="Variant Cover"
+            className="w-32 h-32 object-cover mt-2 rounded-lg"
+          />
+        )}
+      </div>
+
+      <div className="mt-4">
+        <label className="block text-sm font-medium">Gallery Images</label>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(e) => {
+            const newVariants = [...variants];
+            newVariants[index].images = Array.from(e.target.files);
+            setVariants(newVariants);
+          }}
+          className="mt-2"
+        />
+      </div>
+    </div>
+  ))}
+
+  <button
+    onClick={() =>
+      setVariants((prev) => [
+        ...prev,
+        { color: "", metalType: "", size: "", coverImage: null, images: [] },
+      ])
+    }
+    className="mt-4 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+  >
+    ➕ Add Variant
+  </button>
+</div>
+
+
+
           {/* Additional Images */}
           <div>
             <label className="block text-sm font-medium">Additional Images</label>
@@ -269,6 +473,11 @@ if (!response.ok) throw new Error(resData.message || "Failed to add product");
             <label className="block text-sm font-medium">3D Model (.glb / .usdz)</label>
             <input type="file" accept=".glb,.usdz" onChange={handleModel3DChange} />
           </div>
+
+          {/* 🖼 Variant Images (if not base product) */}
+
+
+
 
           {/* Product Video (MP4) */}
 <div>
@@ -491,6 +700,29 @@ if (!response.ok) throw new Error(resData.message || "Failed to add product");
             </div>
           </div>
 
+          {/* ⭐ Product Rating (Admin Input) */}
+<div>
+  <label className="block text-sm font-medium mb-1">Product Rating</label>
+  <div className="flex items-center gap-2">
+    {[1, 2, 3, 4, 5].map((star) => (
+      <button
+        key={star}
+        type="button"
+        onClick={() =>
+          setFormData((prev) => ({ ...prev, rating: star }))
+        }
+        className={`text-3xl ${
+          star <= formData.rating ? "text-yellow-400" : "text-gray-300"
+        } hover:scale-110 transition-transform`}
+      >
+        ★
+      </button>
+    ))}
+    <span className="ml-2 text-gray-600">{formData.rating} / 5</span>
+  </div>
+</div>
+
+
 
   {/* Base Price (INR) */}
   <div>
@@ -595,27 +827,33 @@ if (!response.ok) throw new Error(resData.message || "Failed to add product");
             ))}
           </div>
 
+          {/* 🔹 Making Charges by Country */}
+<div className="mt-8">
+  <h3 className="text-lg font-semibold mb-3">Making Charges by Country</h3>
+  {currencyList.map(({ code, symbol, flag, country }) => (
+    <div key={code} className="flex items-center gap-3 mb-3">
+      <div className="w-40 flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50">
+        <span className="text-xl">{flag}</span>
+        <span className="font-medium">
+          {code} ({symbol})
+        </span>
+      </div>
+      <input
+        type="number"
+        placeholder={`Enter making charge (${country})`}
+        value={makingChargesByCountry[code]?.amount || ""}
+        onChange={(e) =>
+          handleMakingChargeChange(code, symbol, e.target.value)
+        }
+        className="flex-1 px-4 py-3 border-2 rounded-xl focus:border-yellow-500"
+      />
+    </div>
+  ))}
+</div>
+
+
           {/* 🔹 Variant Links */}
-          <div>
-            <h3 className="text-lg font-semibold mb-3">Link Variant Products</h3>
-            {VARIANT_TYPES.map((v) => (
-              <div key={v} className="flex items-center gap-3 mb-3">
-                <label className="w-32 font-medium">{v}:</label>
-                <input
-                  type="text"
-                  placeholder="Paste Product ID"
-                  value={variantLinks[v] || ""}
-                  onChange={(e) =>
-                    setVariantLinks((prev) => ({
-                      ...prev,
-                      [v]: e.target.value,
-                    }))
-                  }
-                  className="flex-1 px-4 py-2 border-2 rounded-lg focus:border-yellow-500"
-                />
-              </div>
-            ))}
-          </div>
+         
 
           {/* Description, StoneDetails, Featured */}
           {/* ... same as before */}
@@ -665,6 +903,55 @@ if (!response.ok) throw new Error(resData.message || "Failed to add product");
     </label>
   </div>
 </>
+
+{/* 💎 Only show diamond detail sections for Diamond categoryType */}
+{/* 💎 Show Diamond/Gemstone/Fashion detail sections */}
+{["Diamond", "Gemstone", "Fashion"].includes(formData.categoryType) && (
+  <div className="space-y-6">
+    {/* Main Diamond Details */}
+    <div className="border p-4 rounded-xl bg-gray-50">
+      <h3 className="font-semibold mb-3">Main Diamond Details</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Object.keys(diamondDetails).map((key) => (
+          <div key={key}>
+            <label className="block text-sm font-medium capitalize">
+              {key.replace(/([A-Z])/g, " $1")}
+            </label>
+            <input
+              type="text"
+              name={key}
+              value={diamondDetails[key]}
+              onChange={(e) => handleDiamondChange(e, false)}
+              className="w-full px-4 py-2 border-2 rounded-lg focus:border-yellow-500"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Side Diamond Details */}
+    <div className="border p-4 rounded-xl bg-gray-50">
+      <h3 className="font-semibold mb-3">Side Diamond Details (Optional)</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Object.keys(sideDiamondDetails).map((key) => (
+          <div key={key}>
+            <label className="block text-sm font-medium capitalize">
+              {key.replace(/([A-Z])/g, " $1")}
+            </label>
+            <input
+              type="text"
+              name={key}
+              value={sideDiamondDetails[key]}
+              onChange={(e) => handleDiamondChange(e, true)}
+              className="w-full px-4 py-2 border-2 rounded-lg focus:border-yellow-500"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
+
 
           {/* Buttons */}
           <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
