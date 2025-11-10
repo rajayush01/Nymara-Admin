@@ -33,7 +33,7 @@ export default function Login() {
 
       // Redirect based on isAdmin
       if (res.data.user.isAdmin) {
-        navigate("/admin/dashboard");
+        navigate("/admin");
       } else {
         navigate("/"); // normal user home
       }
