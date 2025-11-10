@@ -28,6 +28,8 @@ const CURRENCY_LIST = [
   
 ];
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function EditProductModal({ product, onClose, onSave }) {
   const [formData, setFormData] = useState(product || {});
   const [prices, setPrices] = useState(product?.prices || {});
@@ -93,7 +95,7 @@ export default function EditProductModal({ product, onClose, onSave }) {
       const token = localStorage.getItem("token");
 
       await axios.put(
-        `http://localhost:5000/api/ornaments/edit/${product._id}`,
+        `${API_URL}/api/ornaments/edit/${product._id}`,
         payload,
         {
           headers: { Authorization: `Bearer ${token}` },

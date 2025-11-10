@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -9,7 +11,7 @@ export default function Customers() {
   // Fetch all customers on mount
   useEffect(() => {
     axios
-      .get("http://localhost:5000/api/admin/customers", {
+      .get(`${API_URL}/api/admin/customers`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       })
       .then((res) => setCustomers(res.data.customers || []))
@@ -21,7 +23,7 @@ export default function Customers() {
     setLoadingDetails(true);
     try {
       const res = await axios.get(
-        `http://localhost:5000/api/admin/customers/${userId}/orders`,
+        `${API_URL}/api/admin/customers/${userId}/orders`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,

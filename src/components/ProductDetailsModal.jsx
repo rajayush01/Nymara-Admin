@@ -25,6 +25,9 @@ const VARIANT_COLORS = {
 
 const displayVal = (val) => (Array.isArray(val) ? val.join(", ") : val || "—");
 
+const API_URL = import.meta.env.VITE_API_URL;
+
+
 export default function ProductDetailsModal({ productId, onClose }) {
   const [product, setProduct] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -37,7 +40,7 @@ export default function ProductDetailsModal({ productId, onClose }) {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(
-        `http://localhost:5000/api/ornaments/${id}?currency=${currency}`,
+        `${API_URL}/api/ornaments/${id}?currency=${currency}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 

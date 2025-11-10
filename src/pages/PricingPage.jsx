@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function PricingPage() {
   const [goldPrices, setGoldPrices] = useState({ "14K": "", "18K": "", "22K": "" });
   const [diamondPrice, setDiamondPrice] = useState("");
@@ -8,7 +10,7 @@ export default function PricingPage() {
   const [currentPricing, setCurrentPricing] = useState(null);
   const [loadingPricing, setLoadingPricing] = useState(true);
 
-  const API_BASE = "http://localhost:5000/api/ornaments/pricing";
+  const API_BASE = `${API_URL}/api/ornaments/pricing`;
 
   // 🔹 Fetch current pricing on load
   useEffect(() => {

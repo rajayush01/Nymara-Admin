@@ -36,6 +36,8 @@ const CURRENCY_OPTIONS = [
   { code: "JPY", symbol: "¥" },
 ];
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function ProductList() {
   const [products, setProducts] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -76,7 +78,7 @@ export default function ProductList() {
       const token = localStorage.getItem("token"); // ✅ get token
 
       // --- FIX: Correct template literal usage for Authorization header ---
-      const res = await axios.get("http://localhost:5000/api/ornaments/", {
+      const res = await axios.get(`${API_URL}/api/ornaments/`, {
         params,
         headers: {
           Authorization: `Bearer ${token}`, // ✅ Corrected template literal
@@ -131,7 +133,7 @@ export default function ProductList() {
 
     try {
       // --- FIX: Correct template literal usage for URL and Authorization header ---
-      await axios.delete(`http://localhost:5000/api/ornaments/delete/${id}`, {
+      await axios.delete(`${API_URL}/api/ornaments/delete/${id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
       // --------------------------------------------------------------------

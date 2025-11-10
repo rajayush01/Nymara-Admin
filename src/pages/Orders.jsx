@@ -31,6 +31,8 @@ const mockOrders = [
   }
 ];
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ export default function Orders() {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/admin/orders", {
+        const res = await axios.get(`${API_URL}/api/admin/orders`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
 

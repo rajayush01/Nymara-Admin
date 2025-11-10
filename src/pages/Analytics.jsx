@@ -43,6 +43,8 @@ const mockSummary = {
   ],
 };
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function Analytics() {
   const [data, setData] = useState(null);
   const [range, setRange] = useState("30");
@@ -55,7 +57,7 @@ export default function Analytics() {
     const mode = range === "365" ? "monthly" : "daily";
 
     axios
-      .get(`http://localhost:5000/api/analytics/summary?range=${range}&mode=${mode}`, {
+      .get(`${API_URL}/api/analytics/summary?range=${range}&mode=${mode}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       })
       .then((res) => {
