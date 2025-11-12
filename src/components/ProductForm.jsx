@@ -232,6 +232,20 @@ export default function ProductForm({ onClose, onSave }) {
     setImages(Array.from(e.target.files));
   };
 
+  // 🆕 Handle variant video file upload
+const handleVariantVideoChange = (index, file) => {
+  if (!file) return;
+  const videoURL = URL.createObjectURL(file);
+  setVariants((prev) =>
+    prev.map((variant, i) =>
+      i === index
+        ? { ...variant, videoFile: file, videoPreview: videoURL }
+        : variant
+    )
+  );
+};
+
+
   const handleModel3DChange = (e) => setModel3D(e.target.files[0]); // 🟢 New
 
   const handleSubmit = async () => {
@@ -303,6 +317,10 @@ export default function ProductForm({ onClose, onSave }) {
               data.append(`variant${index}_images`, img);
             });
           }
+
+          if (v.videoFile) {
+      data.append(`variant${index}_video`, v.videoFile);
+    }
         });
       }
 
@@ -446,6 +464,26 @@ export default function ProductForm({ onClose, onSave }) {
                     />
                   )}
                 </div>
+
+                {/* 🆕 Variant Video (MP4) */}
+<div className="mt-4">
+  <label className="block text-sm font-medium">Variant Video (MP4)</label>
+  <input
+    type="file"
+    accept="video/mp4"
+    onChange={(e) => handleVariantVideoChange(index, e.target.files?.[0])}
+    className="mt-2"
+  />
+
+  {variant.videoPreview && (
+    <video
+      src={variant.videoPreview}
+      controls
+      className="mt-3 w-full max-h-56 rounded-lg border shadow-md object-cover"
+    />
+  )}
+</div>
+
 
                 <div className="mt-4">
                   <label className="block text-sm font-medium">

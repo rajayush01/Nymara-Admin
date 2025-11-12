@@ -183,6 +183,20 @@ export default function EditProductModal({ product, onClose, onSave }) {
     );
   };
 
+  const handleVariantVideoChange = (index, file) => {
+  if (!file) return;
+  const videoURL = URL.createObjectURL(file);
+
+  setVariants((prev) =>
+    prev.map((variant, i) =>
+      i === index
+        ? { ...variant, videoFile: file, videoPreview: videoURL }
+        : variant
+    )
+  );
+};
+
+
   const addVariant = () => {
     setVariants((prev) => [
       ...prev,
@@ -382,6 +396,25 @@ export default function EditProductModal({ product, onClose, onSave }) {
                       className="w-full px-4 py-2 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
                     />
                   </div>
+
+                   <div className="mt-4">
+      <label className="block text-sm font-medium mb-1">Variant Video (MP4)</label>
+      <input
+        type="file"
+        accept="video/mp4"
+        onChange={(e) => handleVariantVideoChange(index, e.target.files?.[0])}
+        className="text-sm"
+      />
+
+      {/* Show video preview if available */}
+      {variant.videoPreview && (
+        <video
+          src={variant.videoPreview}
+          controls
+          className="mt-3 w-full max-h-56 rounded-lg border shadow-md object-cover"
+        />
+      )}
+    </div>
                 </div>
               </div>
             ))}
