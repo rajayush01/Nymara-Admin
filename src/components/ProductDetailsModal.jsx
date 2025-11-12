@@ -126,7 +126,7 @@ export default function ProductDetailsModal({ productId, onClose }) {
             onClick={onClose}
             className="text-white hover:bg-white/20 px-3 py-1 rounded-lg"
           >
-            ❌
+            X
           </button>
         </div>
 
