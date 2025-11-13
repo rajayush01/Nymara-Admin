@@ -46,7 +46,6 @@ export default function ProductList() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-
   // Filters
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -77,14 +76,12 @@ export default function ProductList() {
 
       const token = localStorage.getItem("token"); // ✅ get token
 
-      // --- FIX: Correct template literal usage for Authorization header ---
       const res = await axios.get(`${API_URL}/api/ornaments/`, {
         params,
         headers: {
-          Authorization: `Bearer ${token}`, // ✅ Corrected template literal
+          Authorization: `Bearer ${token}`,
         },
       });
-      // --------------------------------------------------------------------
 
       setProducts(res.data.ornaments || []);
       setTotalPages(res.data.totalPages || 1);
@@ -95,48 +92,25 @@ export default function ProductList() {
     }
   };
 
-
+  // ✅ Single useEffect to handle all filter changes and pagination
   useEffect(() => {
-    // If any filter changes, reset to page 1
-    const shouldResetPage = page !== 1 && (
-        search || category || subCategory || type || gender || minPrice || maxPrice || sort || currency
-    );
-
-    if (shouldResetPage) {
-        setPage(1);
-    } else {
-        fetchProducts();
-    }
-  }, [search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency, page]);
-
-  // If a filter changes, we want to call fetchProducts, but only *after* page resets to 1.
-  // We use a separate useEffect to handle the reset, and let the main useEffect handle the fetch.
-  // This helps avoid double-fetching when a filter changes.
-  useEffect(() => {
-    // This effect is specifically for filter changes (excluding 'page' and 'currency')
-    // and resetting the page if needed, which then triggers the main effect.
-    if (page !== 1) {
-        setPage(1);
-    } else {
-        fetchProducts();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Reset to page 1 when any filter changes (but not when page itself changes)
+    setPage(1);
   }, [search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency]);
-  
+
+  // ✅ Separate useEffect to fetch products whenever page changes or on mount
   useEffect(() => {
     fetchProducts();
-  }, [page]); // Only refetch when page changes, as other filters are handled above.
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency]);
 
   const deleteProduct = async (id) => {
     if (!window.confirm("Are you sure you want to delete this product?")) return;
 
     try {
-      // --- FIX: Correct template literal usage for URL and Authorization header ---
       await axios.delete(`${API_URL}/api/ornaments/delete/${id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
-      // --------------------------------------------------------------------
       fetchProducts();
     } catch (err) {
       console.error("Delete Product Error:", err.response?.data || err.message);
@@ -180,7 +154,7 @@ export default function ProductList() {
           value={subCategory}
           onChange={(e) => setSubCategory(e.target.value)}
           className="border p-2 rounded"
-          disabled={!type || !SUBCATEGORY_MAP[type]} // Check if type is set and exists in map
+          disabled={!type || !SUBCATEGORY_MAP[type]}
         >
           <option value="">All Subcategories</option>
           {type && SUBCATEGORY_MAP[type] && SUBCATEGORY_MAP[type].map((sub) => (
@@ -281,10 +255,9 @@ export default function ProductList() {
                       p.gender,
                       Array.isArray(p.subCategory) ? p.subCategory.join(", ") : p.subCategory
                     ]
-                      .filter(Boolean)  // remove undefined, null, empty strings
+                      .filter(Boolean)
                       .join(" | ")}     
                   </p>
-
 
                   <p className="text-gray-700 mt-2 line-clamp-2">{p.description}</p>
                   <p className="text-gray-500 mt-1">Stock: {p.stock}</p>
@@ -348,7 +321,6 @@ export default function ProductList() {
           </button>
         </div>
       )}
-
 
       {/* Edit Modal */}
       {editingProduct && (
