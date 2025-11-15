@@ -6,6 +6,7 @@ import ProductDetailsModal from "./ProductDetailsModal";
 const TYPE_OPTIONS = ["Ring", "Necklace", "Chain", "Bracelet", "Earring", "Pendant", "Bangle", "Other"];
 const GENDER_OPTIONS = ["Men", "Women", "Unisex"];
 const CATEGORY_OPTIONS = ["Gold", "Diamond", "Gemstone", "Fashion"];
+
 const SUBCATEGORY_MAP = {
   Ring: ["Engagement Rings", "Wedding Rings", "Eternity Band", "Cocktail Rings", "Fashion Rings"],
   Earring: ["Studs", "Hoops", "Drops", "Fashion Earrings"],
@@ -16,6 +17,7 @@ const SUBCATEGORY_MAP = {
   Bangle: ["Other"],
   Other: ["Gemstone", "Gold", "Diamond", "Other"],
 };
+
 const SORT_OPTIONS = [
   { label: "Low to High", value: "price_asc" },
   { label: "High to Low", value: "price_desc" },
@@ -23,20 +25,41 @@ const SORT_OPTIONS = [
   { label: "Oldest", value: "oldest" },
 ];
 
-// 🔹 Currency options
 const CURRENCY_OPTIONS = [
   { code: "INR", symbol: "₹" },
   { code: "USD", symbol: "$" },
   { code: "GBP", symbol: "£" },
   { code: "CAD", symbol: "CA$" },
   { code: "EUR", symbol: "€" },
-  { code: "AED", symbol: "د.إ" },    // 🇦🇪 UAE Dirham
-  { code: "AUD", symbol: "A$" },     // 🇦🇺 Australian Dollar
-  { code: "SGD", symbol: "S$" },     // 🇸🇬 Singapore Dollar
+  { code: "AED", symbol: "د.إ" },
+  { code: "AUD", symbol: "A$" },
+  { code: "SGD", symbol: "S$" },
   { code: "JPY", symbol: "¥" },
 ];
 
 const API_URL = import.meta.env.VITE_API_URL;
+
+// 🔥 Subcategory → backend mapping
+const SUB_MAP = {
+  "engagement rings": "engagement",
+  "wedding rings": "wedding",
+  "eternity band": "eternity",
+  "cocktail rings": "cocktail",
+  "fashion rings": "fashion",
+
+  "studs": "studs",
+  "hoops": "hoops",
+  "drops": "drops",
+  "fashion earrings": "fashion",
+
+  "tennis": "tennis",
+  "pendant": "pendants",
+  "fashion necklace": "fashion",
+
+  "tennis bracelet": "tennis",
+  "bangles": "bangles",
+  "fashion bracelet": "fashion",
+};
 
 export default function ProductList() {
   const [products, setProducts] = useState([]);
@@ -55,26 +78,38 @@ export default function ProductList() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState("");
-  const [currency, setCurrency] = useState("INR"); // ✅ currency state
+  const [currency, setCurrency] = useState("INR");
+
+  const normalize = (val) => val?.trim().toLowerCase() || "";
 
   const fetchProducts = async () => {
     setLoading(true);
+
     try {
+      // Normalize type → backend (Ring → rings)
+      const typeNormalized = type ? normalize(type) + "s" : "";
+
+      // Normalize subCategory → backend
+      const subNormalized =
+        subCategory && SUB_MAP[normalize(subCategory)]
+          ? SUB_MAP[normalize(subCategory)]
+          : "";
+
       const params = {
         search,
-        category,
-        type,
-        subCategory,
+        category: normalize(category),
+        type: typeNormalized,
+        subCategory: subNormalized,
         gender,
         minPrice,
         maxPrice,
         sort,
-        currency, // ✅ pass currency
+        currency,
         page,
-        limit: 8,
+        limit: 50,
       };
 
-      const token = localStorage.getItem("token"); // ✅ get token
+      const token = localStorage.getItem("token");
 
       const res = await axios.get(`${API_URL}/api/ornaments/`, {
         params,
@@ -86,35 +121,34 @@ export default function ProductList() {
       setProducts(res.data.ornaments || []);
       setTotalPages(res.data.totalPages || 1);
     } catch (err) {
-      console.error("Fetch Products Error:", err.response?.data || err.message);
+      console.error("Fetch Error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Single useEffect to handle all filter changes and pagination
+  // Reset page when filters change
   useEffect(() => {
-    // Reset to page 1 when any filter changes (but not when page itself changes)
     setPage(1);
   }, [search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency]);
 
-  // ✅ Separate useEffect to fetch products whenever page changes or on mount
+  // Fetch after page change or filter change
   useEffect(() => {
     fetchProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency]);
+  }, [search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency, page]);
 
   const deleteProduct = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this product?")) return;
+    if (!window.confirm("Delete this product?")) return;
 
     try {
       await axios.delete(`${API_URL}/api/ornaments/delete/${id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
+
       fetchProducts();
     } catch (err) {
-      console.error("Delete Product Error:", err.response?.data || err.message);
-      alert("❌ Failed to delete product");
+      console.error("Delete Error:", err.response?.data || err.message);
+      alert("❌ Delete failed");
     }
   };
 
@@ -129,7 +163,7 @@ export default function ProductList() {
           placeholder="Search..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded flex-1 min-w-[150px]"
+          className="border p-2 rounded flex-1"
         />
 
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="border p-2 rounded">
@@ -154,12 +188,13 @@ export default function ProductList() {
           value={subCategory}
           onChange={(e) => setSubCategory(e.target.value)}
           className="border p-2 rounded"
-          disabled={!type || !SUBCATEGORY_MAP[type]}
+          disabled={!type}
         >
           <option value="">All Subcategories</option>
-          {type && SUBCATEGORY_MAP[type] && SUBCATEGORY_MAP[type].map((sub) => (
-            <option key={sub} value={sub}>{sub}</option>
-          ))}
+          {type &&
+            SUBCATEGORY_MAP[type]?.map((sub) => (
+              <option key={sub} value={sub}>{sub}</option>
+            ))}
         </select>
 
         <select value={gender} onChange={(e) => setGender(e.target.value)} className="border p-2 rounded">
@@ -169,20 +204,8 @@ export default function ProductList() {
           ))}
         </select>
 
-        <input
-          type="number"
-          placeholder="Min Price"
-          value={minPrice}
-          onChange={(e) => setMinPrice(e.target.value)}
-          className="border p-2 rounded w-24"
-        />
-        <input
-          type="number"
-          placeholder="Max Price"
-          value={maxPrice}
-          onChange={(e) => setMaxPrice(e.target.value)}
-          className="border p-2 rounded w-24"
-        />
+        <input type="number" placeholder="Min" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} className="border p-2 rounded w-24" />
+        <input type="number" placeholder="Max" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} className="border p-2 rounded w-24" />
 
         <select value={sort} onChange={(e) => setSort(e.target.value)} className="border p-2 rounded">
           <option value="">Sort By</option>
@@ -191,95 +214,59 @@ export default function ProductList() {
           ))}
         </select>
 
-        {/* ✅ Currency Dropdown */}
         <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="border p-2 rounded">
           {CURRENCY_OPTIONS.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.symbol} {c.code}
-            </option>
+            <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
           ))}
         </select>
       </div>
 
       {/* Product Grid */}
       {loading ? (
-        <p className="text-gray-500">Loading products...</p>
+        <p>Loading...</p>
       ) : products.length === 0 ? (
-        <p className="text-gray-500">No products found.</p>
+        <p>No products found.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {products.map((p) => (
             <div
               key={p._id}
-              className="bg-white shadow-lg rounded-lg overflow-hidden flex flex-col cursor-pointer hover:shadow-xl transition"
+              className="bg-white shadow rounded cursor-pointer"
               onClick={() => setViewingProductId(p._id)}
             >
-              {p.coverImage || (p.images && p.images.length > 0) ? (
-                <img
-                  src={p.coverImage || (p.images && p.images[0])}
-                  alt={p.name}
-                  className="h-40 w-full object-cover"
-                />
-              ) : (
-                <div className="h-40 w-full bg-gray-200 flex items-center justify-center">
-                  No Image
-                </div>
-              )}
+              <img
+                src={p.displayCoverImage || p.coverImage}
+                alt={p.name}
+                className="h-40 w-full object-cover"
+              />
 
-              <div className="p-4 flex-1 flex flex-col justify-between">
-                <div>
-                  <h3 className="font-semibold text-lg">{p.name}</h3>
-                  {/* ✅ Updated price display with originalPrice + discount */}
-                  <div className="mt-1">
-                    <span className="text-gray-800 font-semibold text-lg">
-                      {p.currency}{p.displayPrice?.toLocaleString()}
+              <div className="p-4">
+                <h3 className="font-semibold">{p.name}</h3>
+
+                <div className="mt-1">
+                  <span className="text-lg font-semibold">
+                    {p.currency}{p.displayPrice?.toLocaleString()}
+                  </span>
+
+                  {p.originalPrice > p.displayPrice && (
+                    <span className="ml-2 line-through text-sm text-gray-500">
+                      {p.currency}{p.originalPrice?.toLocaleString()}
                     </span>
+                  )}
 
-                    {p.originalPrice && p.originalPrice > p.displayPrice && (
-                      <span className="text-gray-400 line-through ml-2 text-sm">
-                        {p.currency}{p.originalPrice?.toLocaleString()}
-                      </span>
-                    )}
-
-                    {p.discount > 0 && (
-                      <span className="text-red-500 text-sm font-medium ml-2">
-                        ({p.discount}% OFF)
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-sm text-gray-500 mt-1">
-                    {[ 
-                      Array.isArray(p.category) ? p.category.join(", ") : p.category,
-                      p.type,
-                      p.gender,
-                      Array.isArray(p.subCategory) ? p.subCategory.join(", ") : p.subCategory
-                    ]
-                      .filter(Boolean)
-                      .join(" | ")}     
-                  </p>
-
-                  <p className="text-gray-700 mt-2 line-clamp-2">{p.description}</p>
-                  <p className="text-gray-500 mt-1">Stock: {p.stock}</p>
+                  {p.discount > 0 && (
+                    <span className="ml-2 text-red-500">({p.discount}% OFF)</span>
+                  )}
                 </div>
 
-                <div className="mt-4 flex justify-between">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingProduct(p);
-                    }}
-                    className="px-3 py-1 bg-yellow-200 rounded hover:bg-yellow-300"
-                  >
+                <p className="text-sm text-gray-600 mt-1">{p.category} | {p.type}</p>
+                <p className="mt-2 text-gray-700 line-clamp-2">{p.description}</p>
+
+                <div className="flex justify-between mt-4">
+                  <button onClick={(e) => { e.stopPropagation(); setEditingProduct(p); }} className="px-3 py-1 bg-yellow-200 rounded hover:bg-yellow-300">
                     Edit
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteProduct(p._id);
-                    }}
-                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                  >
+                  <button onClick={(e) => { e.stopPropagation(); deleteProduct(p._id); }} className="px-3 py-1 bg-red-500 text-white rounded">
                     Delete
                   </button>
                 </div>
@@ -289,54 +276,27 @@ export default function ProductList() {
         </div>
       )}
 
-      {/* Pagination Controls */}
+      {/* Pagination */}
       {!loading && totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2 mt-8">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((prev) => prev - 1)}
-            className="px-3 py-2 border rounded disabled:opacity-50"
-          >
-            ◀ Prev
-          </button>
+        <div className="flex justify-center gap-2 mt-6">
+          <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-2 border rounded">◀ Prev</button>
 
-          {Array.from({ length: totalPages }, (_, i) => (
-            <button
-              key={i}
-              onClick={() => setPage(i + 1)}
-              className={`px-3 py-2 border rounded ${          
-                page === i + 1 ? "bg-yellow-400 text-white font-bold" : "hover:bg-gray-100"
-              }`}      
-            >
+          {Array.from({ length: totalPages }).map((_, i) => (
+            <button key={i} onClick={() => setPage(i + 1)} className={`px-3 py-2 border rounded ${page === i + 1 ? "bg-yellow-400 text-white" : ""}`}>
               {i + 1}
             </button>
           ))}
 
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage((prev) => prev + 1)}
-            className="px-3 py-2 border rounded disabled:opacity-50"
-          >
-            Next ▶
-          </button>
+          <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="px-3 py-2 border rounded">Next ▶</button>
         </div>
       )}
 
-      {/* Edit Modal */}
       {editingProduct && (
-        <EditProductModal
-          product={editingProduct}
-          onClose={() => setEditingProduct(null)}
-          onSave={fetchProducts}
-        />
+        <EditProductModal product={editingProduct} onClose={() => setEditingProduct(null)} onSave={fetchProducts} />
       )}
 
-      {/* Product Details Modal */}
       {viewingProductId && (
-        <ProductDetailsModal
-          productId={viewingProductId}
-          onClose={() => setViewingProductId(null)}
-        />
+        <ProductDetailsModal productId={viewingProductId} onClose={() => setViewingProductId(null)} />
       )}
     </div>
   );
