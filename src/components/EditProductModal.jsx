@@ -1,814 +1,885 @@
-import { useState, useEffect } from "react";
+// EditProductModal.jsx
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 
-const subCategoryOptions = {
+const API_URL = import.meta.env.VITE_API_URL || "";
+
+/* ---------- Constants (confirmed) ---------- */
+const METAL_TYPES = [
+"18K Gold",
+ "18K White Gold", 
+ "18K Rose Gold",
+  "14K Gold", 
+  "14K White Gold", 
+  "14K Rose Gold",
+   "Platinum",
+    "925 Sterling Silver", 
+    "Gold Vermeil",
+];
+
+const PURITIES = ["18K", "22K", "14K"]; // No 24K as requested
+
+const CATEGORY_OPTIONS = [
+  "rings",
+  "earrings",
+  "necklaces",
+  "bracelets",
+  "mens",
+  "loose-diamonds",
+];
+
+const SUBCATEGORY_MAP = {
   rings: ["engagement", "wedding", "eternity", "cocktail", "gemstone", "gold", "fashion"],
   earrings: ["studs", "hoops", "gemstone", "gold", "fashion"],
   necklaces: ["tennis", "pendants", "gemstone", "gold", "fashion"],
   bracelets: ["tennis", "bangles", "gemstone", "gold", "fashion"],
-  mens: ["mens rings", "mens earrings", "mens necklaces", "mens bracelets", "cufflinks"],
+  mens: ["rings", "earrings", "necklaces", "bracelets", "cufflinks"],
   "loose-diamonds": [],
 };
 
-const categoryOptions = ["rings", "earrings", "necklaces", "bracelets", "mens", "loose-diamonds"];
-const categoryTypeOptions = ["Gold", "Diamond", "Gemstone", "Fashion"];
+const DIAMOND_COLORS = ["D","E","F","G","H","I","J","K","L","M","N","O","P"];
+const DIAMOND_CLARITIES = ["IF","VVS1","VVS2","VS1","VS2","SI1","SI2","I1","I2","I3"];
+const DIAMOND_CUTS = ["Excellent","Very Good","Good","Fair","Poor"];
 
-const METAL_TYPES = [
-  "18K White Gold",
-  "18K Yellow Gold",
-  "18K Rose Gold",
-  "Platinum",
-  "Sterling Silver",
-  "14K Yellow Gold",
-];
-
-const STONE_TYPES = [
-  "Lab-Grown Diamond",
-  "Lab-Grown Sapphire",
-  "Lab-Grown Emerald",
-  "Lab-Grown Ruby",
-  "Pearl",
-  "None",
-];
-
-const STYLES = [
-  "Solitaire",
-  "Halo",
-  "Three Stone",
-  "Wedding Band",
-  "Eternity",
-  "Cocktail",
-  "Drop",
-  "Vintage",
-  "Tennis",
-  "Cluster",
-  "Chain",
-  "Signet",
-  "Studs",
-  "Bangles",
-];
-
-const currencyList = [
-  { code: "USD", symbol: "$", flag: "🇺🇸", country: "United States" },
-  { code: "GBP", symbol: "£", flag: "🇬🇧", country: "United Kingdom" },
-  { code: "CAD", symbol: "CA$", flag: "🇨🇦", country: "Canada" },
-  { code: "EUR", symbol: "€", flag: "🇪🇺", country: "European Union" },
-  { code: "AED", symbol: "د.إ", flag: "🇦🇪", country: "United Arab Emirates" },
-  { code: "AUD", symbol: "A$", flag: "🇦🇺", country: "Australia" },
-  { code: "SGD", symbol: "S$", flag: "🇸🇬", country: "Singapore" },
-  { code: "JPY", symbol: "¥", flag: "🇯🇵", country: "Japan" },
-];
-
-const defaultDiamondDetails = {
-  stoneType: "Diamond",
-  creationMethod: "Lab Grown",
-  shape: "",
-  diamondColor: "",
-  color: "",
-  clarity: "",
-  cutGrade: "",
-  count: "",
-  caratWeight: "",
-  totalCaratWeight: "",
-  setting: "",
-};
-
-const API_URL = import.meta.env.VITE_API_URL;
-
+/* ---------- Component ---------- */
 export default function EditProductModal({ product, onClose, onSave }) {
-  const [formData, setFormData] = useState(product || {});
-  const [prices, setPrices] = useState(product?.prices || {});
-  const [makingChargesByCountry, setMakingChargesByCountry] = useState(product?.makingChargesByCountry || {});
-  const [variants, setVariants] = useState(product?.variants || []);
+  const [form, setForm] = useState({});
+  const [prices, setPrices] = useState({}); // computed price map by currency (if provided)
+  const [makingChargesByCountry, setMakingChargesByCountry] = useState({});
+  const [stones, setStones] = useState([]); // gemstoneDetails
+  const [metal, setMetal] = useState({ weight: 0, purity: "", metalType: "" });
+
+  // Diamonds
+  const [diamondDetails, setDiamondDetails] = useState({
+    carat: 0,
+    count: 0,
+    color: "",
+    clarity: "",
+    cut: "",
+    pricePerCarat: 0,
+    useAuto: true,
+  });
+  const [sideDiamondDetails, setSideDiamondDetails] = useState([]);
+
+  const [variantList, setVariantList] = useState([]);
+  const [existingImages, setExistingImages] = useState([]);
+  const [newImagesFiles, setNewImagesFiles] = useState([]);
+  const [imagesToRemove, setImagesToRemove] = useState([]);
+  const [imagesToAdd, setImagesToAdd] = useState([]);
+
+  const [coverFile, setCoverFile] = useState(null);
+  const [model3DFile, setModel3DFile] = useState(null);
+  const [videoFile, setVideoFile] = useState(null);
+
   const [isSaving, setIsSaving] = useState(false);
 
-  const [diamondDetails, setDiamondDetails] = useState(
-    product?.diamondDetails && Object.keys(product.diamondDetails).length > 0
-      ? product.diamondDetails
-      : defaultDiamondDetails
-  );
-  
-  const [sideDiamondDetails, setSideDiamondDetails] = useState(
-    product?.sideDiamondDetails && Object.keys(product.sideDiamondDetails).length > 0
-      ? product.sideDiamondDetails
-      : defaultDiamondDetails
-  );
+  // frontend-only variants search
+  const [allVariantsCache, setAllVariantsCache] = useState([]);
+  const [variantSearchQuery, setVariantSearchQuery] = useState("");
+  const [variantSearchResults, setVariantSearchResults] = useState([]);
+  const [variantSearchLoading, setVariantSearchLoading] = useState(false);
+  const [variantFilterFields, setVariantFilterFields] = useState({
+    byName: true, bySku: true, byMetal: true, byLabel: true, byColor: true,
+  });
 
-  const [model3D, setModel3D] = useState(null);
-  const [existingModel3D, setExistingModel3D] = useState(product?.model3DUrl || null);
-  const [videoFile, setVideoFile] = useState(null);
-  const [videoPreview, setVideoPreview] = useState(product?.videoUrl || null);
+  // Pricing fetched from backend (matches controllers/pricingController.js)
+  const [pricingModel, setPricingModel] = useState(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
 
+  /* ---------- INIT FROM PRODUCT ---------- */
   useEffect(() => {
-    setFormData(product || {});
-    setPrices(product?.prices || {});
-    setMakingChargesByCountry(product?.makingChargesByCountry || {});
-    setVariants(product?.variants || []);
-    setVideoPreview(product?.videoUrl || null);
-    setExistingModel3D(product?.model3DUrl || null);
+    if (!product) return;
+
+    setForm({
+      name: product.name || "",
+      description: product.description || "",
+      categoryType: product.categoryType || "Gold",
+      category: product.category || "rings",
+      subCategory: product.subCategory || "",
+      gender: product.gender || "Unisex",
+      price: product.price ?? 0,
+      originalPrice: product.originalPrice ?? 0,
+      discount: product.discount ?? 0,
+      makingCharges: product.makingCharges ?? 0,
+      stock: product.stock ?? 1,
+      isFeatured: !!product.isFeatured,
+      color: product.color || "",
+      size: product.size || "",
+      variantLabel: product.variantLabel || "",
+    });
+
+    setPrices(product.prices || {});
+    setMakingChargesByCountry(product.makingChargesByCountry || {});
+    setStones(product.gemstoneDetails || []);
+    setMetal(product.metal || { weight: 0, purity: "", metalType: "" });
 
     setDiamondDetails(
-      product?.diamondDetails && Object.keys(product.diamondDetails).length > 0
-        ? product.diamondDetails
-        : defaultDiamondDetails
+      product.diamondDetails || {
+        carat: 0, count: 0, color: "", clarity: "", cut: "", pricePerCarat: 0, useAuto: true,
+      }
     );
 
-    setSideDiamondDetails(
-      product?.sideDiamondDetails && Object.keys(product.sideDiamondDetails).length > 0
-        ? product.sideDiamondDetails
-        : defaultDiamondDetails
-    );
+    // ⭐ Load backend manual override totals if present
+setForm((f) => ({
+  ...f,
+  mainDiamondTotal:
+    product.mainDiamondTotal !== null && product.mainDiamondTotal !== undefined
+      ? product.mainDiamondTotal
+      : "",
+  sideDiamondTotal:
+    product.sideDiamondTotal !== null && product.sideDiamondTotal !== undefined
+      ? product.sideDiamondTotal
+      : "",
+}));
+
+
+
+    setSideDiamondDetails(product.sideDiamondDetails || []);
+
+    // normalize variants -> array [{label,id}]
+    const variantsArr = [];
+    if (product.variants) {
+      if (Array.isArray(product.variants)) {
+        product.variants.forEach((v) => {
+          if (v._id) variantsArr.push({ label: v.label || v.name || "", id: v._id });
+          else if (typeof v === "object" && v.label && v.id) variantsArr.push(v);
+        });
+      } else if (typeof product.variants === "object") {
+        Object.entries(product.variants).forEach(([label, id]) => variantsArr.push({ label, id }));
+      }
+    }
+    setVariantList(variantsArr);
+
+    setExistingImages(product.images || []);
+    setNewImagesFiles([]);
+    setImagesToRemove([]);
+    setImagesToAdd([]);
+
+    setCoverFile(null);
+    setModel3DFile(null);
+    setVideoFile(null);
   }, [product]);
 
+  /* ---------- Load pricing model once (backend) ---------- */
   useEffect(() => {
-    const { price, originalPrice } = formData;
-    if (price && originalPrice && originalPrice > price) {
-      const calcDiscount = Math.round(((originalPrice - price) / originalPrice) * 100);
-      setFormData((prev) => ({ ...prev, discount: calcDiscount }));
+    let cancelled = false;
+    const loadPricing = async () => {
+      setPricingLoading(true);
+      try {
+        const res = await axios.get(`${API_URL}/api/ornaments/pricing`);
+        if (cancelled) return;
+        if (res.data?.success && res.data?.pricing) {
+          setPricingModel(res.data.pricing);
+        } else if (res.data?.pricing) {
+          setPricingModel(res.data.pricing);
+        } else {
+          setPricingModel(null);
+        }
+      } catch (err) {
+        console.warn("Failed to load pricing:", err);
+        setPricingModel(null);
+      } finally {
+        if (!cancelled) setPricingLoading(false);
+      }
+    };
+    loadPricing();
+    return () => { cancelled = true; };
+  }, []);
+
+  /* ---------- load variants cache once (frontend search) ---------- */
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setVariantSearchLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_URL}/api/ornaments`, {
+          params: { isVariant: true, limit: 500 },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (cancelled) return;
+        const list = res.data?.ornaments || [];
+        setAllVariantsCache(list);
+      } catch (err) {
+        console.error("Failed to fetch variants cache:", err);
+        setAllVariantsCache([]);
+      } finally {
+        if (!cancelled) setVariantSearchLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  /* ---------- local filtering of cached variants ---------- */
+  useEffect(() => {
+    if (!variantSearchQuery) {
+      setVariantSearchResults([]);
+      return;
     }
-  }, [formData.price, formData.originalPrice]);
+    const q = variantSearchQuery.trim().toLowerCase();
+    const fields = variantFilterFields;
+    const filtered = allVariantsCache.filter((v) => {
+      try {
+        if (fields.byName && v.name && v.name.toLowerCase().includes(q)) return true;
+        if (fields.bySku && v.sku && String(v.sku).toLowerCase().includes(q)) return true;
+        if (fields.byMetal && v.metal?.metalType && v.metal.metalType.toLowerCase().includes(q)) return true;
+        if (fields.byLabel && v.variantLabel && v.variantLabel.toLowerCase().includes(q)) return true;
+        if (fields.byColor && v.color && v.color.toLowerCase().includes(q)) return true;
+        return false;
+      } catch (e) {
+        return false;
+      }
+    });
+    setVariantSearchResults(filtered.slice(0, 50));
+  }, [variantSearchQuery, allVariantsCache, variantFilterFields]);
 
-  if (!product) return null;
+  /* ---------- form helpers ---------- */
+  // const handleFormChange = (e) => {
+  //   const { name, value, checked, type } = e.target;
+  //   setForm((p) => ({ ...p, [name]: type === "checkbox" ? checked : (type === "number" ? (value === "" ? "" : Number(value)) : value) }));
+  // };
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
+  const handleFormChange = (e) => {
+  const { name, value, checked, type } = e.target;
 
-  const handleDiamondChange = (e, isSide = false) => {
-    const { name, value } = e.target;
-    if (isSide) {
-      setSideDiamondDetails((prev) => ({ ...prev, [name]: value }));
-    } else {
-      setDiamondDetails((prev) => ({ ...prev, [name]: value }));
-    }
-  };
+  // prevent override fields from being auto-number processed
+  if (name === "mainDiamondTotal" || name === "sideDiamondTotal") {
+    setForm((p) => ({ ...p, [name]: value }));
+    return;
+  }
 
-  const handlePriceChange = (code, symbol, value) => {
-    setPrices((prev) => ({
-      ...prev,
-      [code]: { amount: Number(value) || 0, symbol },
-    }));
-  };
-
-  const handleMakingChargeChange = (code, symbol, value) => {
-    setMakingChargesByCountry((prev) => ({
-      ...prev,
-      [code]: { amount: Number(value) || 0, symbol, currency: code },
-    }));
-  };
-
-  const handleModel3DChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setModel3D(file);
-      setExistingModel3D(null);
-    }
-  };
-
-  const handleVideoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setVideoFile(file);
-      setVideoPreview(URL.createObjectURL(file));
-    }
-  };
-
-  const handleVariantChange = (index, field, value) => {
-    setVariants((prev) =>
-      prev.map((variant, i) => (i === index ? { ...variant, [field]: value } : variant))
-    );
-  };
-
-  const handleVariantVideoChange = (index, file) => {
-  if (!file) return;
-  const videoURL = URL.createObjectURL(file);
-
-  setVariants((prev) =>
-    prev.map((variant, i) =>
-      i === index
-        ? { ...variant, videoFile: file, videoPreview: videoURL }
-        : variant
-    )
-  );
+  setForm((p) => ({
+    ...p,
+    [name]:
+      type === "checkbox"
+        ? checked
+        : type === "number"
+        ? (value === "" ? "" : Number(value))
+        : value,
+  }));
 };
 
 
-  const addVariant = () => {
-    setVariants((prev) => [
-      ...prev,
-      { color: "", metalType: "", size: "" },
-    ]);
+  const updateMetal = (k, v) => setMetal((m) => ({ ...m, [k]: v }));
+  const addStone = () => {
+    setStones((s) => [...s, { stoneType: "", carat: 0, count: 1, pricePerCarat: 0, useAuto: true, color: "", clarity: "", cut: "" }]);
+  };
+  const updateStone = (idx, k, v) => setStones((s) => s.map((st, i) => (i === idx ? { ...st, [k]: v } : st)));
+  const removeStone = (idx) => setStones((s) => s.filter((_, i) => i !== idx));
+
+  const updateMainDiamond = (k, v) => setDiamondDetails((d) => ({ ...d, [k]: v }));
+  const addSideDiamond = () => setSideDiamondDetails((s) => [...s, { carat: 0, count: 1, color: "", clarity: "", cut: "", pricePerCarat: 0, useAuto: true }]);
+  const updateSideDiamond = (idx, k, v) => setSideDiamondDetails((s) => s.map((it, i) => (i === idx ? { ...it, [k]: v } : it)));
+  const removeSideDiamond = (idx) => setSideDiamondDetails((s) => s.filter((_, i) => i !== idx));
+
+  // price and making handlers
+  const handlePriceCurrency = (code, symbol, amount) =>
+    setPrices((p) => ({ ...p, [code]: { amount: Number(amount) || 0, symbol } }));
+  const handleMakingCharge = (code, symbol, amount) =>
+    setMakingChargesByCountry((p) => ({ ...p, [code]: { amount: Number(amount) || 0, symbol, currency: code } }));
+
+  // media handlers
+  const onCoverFileChange = (e) => setCoverFile(e.target.files?.[0] || null);
+  const onNewImagesChange = (e) => setNewImagesFiles(Array.from(e.target.files || []));
+  const markImageToRemove = (url) => setImagesToRemove((p) => (p.includes(url) ? p.filter((x) => x !== url) : [...p, url]));
+  const addImageUrlToAdd = (url) => { if (!url) return; setImagesToAdd((p) => [...p, url]); };
+  const onModel3DChange = (e) => setModel3DFile(e.target.files?.[0] || null);
+  const onVideoChange = (e) => setVideoFile(e.target.files?.[0] || null);
+
+  // variant linking helpers (same as before)
+  const addVariantLinkFromInput = (inputValue) => {
+    if (!inputValue) return;
+    const parts = inputValue.split(":");
+    let label = parts.length > 1 ? parts[0].trim() : "";
+    let id = parts.length > 1 ? parts[1].trim() : parts[0].trim();
+    if (!id) return;
+    if (variantList.some((v) => String(v.id) === id)) return alert("Variant already linked");
+    setVariantList((v) => [...v, { label: label || id, id }]);
+  };
+  const addVariantLinkFromObject = (variantObj) => {
+    if (!variantObj || !variantObj._id) return;
+    const label = variantObj.metal?.metalType || variantObj.variantLabel || variantObj.name || variantObj._id;
+    if (variantList.some((v) => String(v.id) === variantObj._id)) return alert("Variant already linked");
+    setVariantList((v) => [...v, { label, id: variantObj._id }]);
+  };
+  const removeVariantLink = (id) => setVariantList((v) => v.filter((x) => String(x.id) !== String(id)));
+
+  /* ---------- Pricing calculation (mirrors controllers/pricingController.js) ---------- */
+  const parsePurityFromMetal = (m) => {
+    const purityMatch =
+      (m?.purity || "").toUpperCase().match(/(\d+K)/) ||
+      (m?.metalType || "").toUpperCase().match(/(\d+K)/);
+    return purityMatch ? purityMatch[1] : null;
   };
 
-  const removeVariant = (index) => {
-    setVariants((prev) => prev.filter((_, i) => i !== index));
+  const calcGoldPrice = (metalObj, goldRates = {}) => {
+    const purity = parsePurityFromMetal(metalObj);
+    const rate = purity ? Number(goldRates?.[purity] || 0) : 0;
+    const weight = Number(metalObj?.weight || 0);
+    return weight * rate;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.name || !formData.weight || !formData.price) {
-      alert("Please fill all required fields: Name, Weight, Price");
-      return;
+  const calcDiamondPriceForDiamondCategory = (metalObj, diamondRate = 0) => {
+    const weight = Number(metalObj?.weight || 0);
+    return weight * Number(diamondRate || 0);
+  };
+
+  const calcGemstonePrice = (stonesArr = [], gemstoneRates = {}) => {
+    let total = 0;
+    stonesArr.forEach((st) => {
+      const stoneType = st.stoneType || st.type || st.gemstoneType || st.name || "";
+      if (!stoneType) return;
+      const rate = Number(gemstoneRates?.[stoneType] || 0);
+      const carat = Number(st.carat || st.weight || 0);
+      const count = Number(st.count || 1);
+      total += rate * carat * count;
+    });
+    return total;
+  };
+
+  const calcCompositePrice = (item, pricing) => {
+    let goldCost = 0, diamondCost = 0, gemstoneCost = 0;
+
+    if (pricing?.goldPrices) {
+      goldCost = calcGoldPrice(item.metal || {}, pricing.goldPrices);
     }
 
+    if (pricing?.diamondPricePerCarat) {
+      const d = item.diamondDetails || {};
+      diamondCost += Number(d.carat || 0) * Number(d.count || 0) * Number(pricing.diamondPricePerCarat || 0);
+      (item.sideDiamondDetails || []).forEach((s) => {
+        diamondCost += Number(s.carat || 0) * Number(s.count || 0) * Number(pricing.diamondPricePerCarat || 0);
+      });
+    }
+
+    if (pricing?.gemstonePrices) {
+      gemstoneCost = calcGemstonePrice(item.gemstoneDetails || item.stones || [], pricing.gemstonePrices);
+    }
+
+    return goldCost + diamondCost + gemstoneCost;
+  };
+
+  /* ---------- Auto-recompute price when relevant inputs change ---------- */
+  useEffect(() => {
+    // Recompute whenever pricingModel or key inputs change
+    const doCompute = () => {
+
+       if (!pricingModel) return;
+      const categoryType = form.categoryType || product?.categoryType || "Gold";
+      const currentPricing = pricingModel || {};
+      let computed = 0;
+
+      if (categoryType === "Gold") {
+        computed = calcGoldPrice(metal, currentPricing.goldPrices || {});
+      } else if (categoryType === "Diamond") {
+        computed = calcDiamondPriceForDiamondCategory(metal, currentPricing.diamondPricePerCarat || 0);
+      } else if (categoryType === "Gemstone") {
+        computed = calcGemstonePrice(stones, currentPricing.gemstonePrices || {});
+      } else if (categoryType === "Composite") {
+        // build a small item-shape to pass into calcCompositePrice
+        const itemShape = {
+          metal,
+          diamondDetails,
+          sideDiamondDetails,
+          gemstoneDetails: stones,
+          stones,
+        };
+        computed = calcCompositePrice(itemShape, currentPricing);
+      } else {
+        // fallback: keep previous price
+        computed = Number(form.price || 0);
+      }
+
+      // include making charges
+const making = Number(form.makingCharges || 0);
+const finalPrice = Number(computed || 0) + making;
+
+// Only update final auto price — keep originalPrice & discount as user-entered
+setForm((f) => ({
+  ...f,
+  price: finalPrice
+}));
+
+    };
+
+    doCompute();
+    // run when any dependency that affects price changes:
+  }, [
+    form.categoryType,
+    metal,
+    diamondDetails,
+    sideDiamondDetails,
+    stones,
+    form.makingCharges,
+    pricingModel,
+    product?._id,
+  ]);
+
+  /* ---------- compute small previews ---------- */
+  const mainDiamondPreview = useMemo(() => {
+    const carat = Number(diamondDetails.carat || 0);
+    const count = Number(diamondDetails.count || 0);
+    const ppc = diamondDetails.useAuto ? Number(pricingModel?.diamondPricePerCarat || diamondDetails.pricePerCarat || 0) : Number(diamondDetails.pricePerCarat || 0);
+    return carat * count * ppc;
+  }, [diamondDetails, pricingModel]);
+
+  const sideDiamondPreview = useMemo(() => {
+    const rate = Number(pricingModel?.diamondPricePerCarat || 0);
+    return (sideDiamondDetails || []).reduce((sum, s) => sum + Number(s.carat || 0) * Number(s.count || 0) * (s.useAuto ? rate : Number(s.pricePerCarat || 0)), 0);
+  }, [sideDiamondDetails, pricingModel]);
+
+  const gemstonesPreview = useMemo(() => {
+    return calcGemstonePrice(stones, pricingModel?.gemstonePrices || {});
+  }, [stones, pricingModel]);
+
+  /* ---------- SAVE (same approach, keep using FormData) ---------- */
+  const handleSave = async (e) => {
+    e?.preventDefault();
+    if (!product?._id) return;
     setIsSaving(true);
+
     try {
       const token = localStorage.getItem("token");
-      const data = new FormData();
+      const fd = new FormData();
 
-      // Add all form fields (excluding image-related fields)
-      Object.entries(formData).forEach(([key, value]) => {
-        if (key === "sku" || key === "_id" || key === "__v") return;
-        // Skip image-related fields
-        if (key === "coverImage" || key === "images") return;
-        if (value !== undefined && value !== null) {
-          data.append(key, value);
-        }
+      // core form fields
+      Object.entries(form).forEach(([k, v]) => {
+  if (v === undefined || v === null) return;
+
+  // ❗ Prevent double-append of diamond totals
+  if (k === "mainDiamondTotal" || k === "sideDiamondTotal") return;
+
+  fd.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+});
+
+
+      // metal, stones, diamonds
+      fd.append("metal", JSON.stringify(metal));
+      fd.append("stones", JSON.stringify(stones));
+      fd.append("diamondDetails", JSON.stringify(diamondDetails));
+      fd.append("sideDiamondDetails", JSON.stringify(sideDiamondDetails));
+      // MANUAL OVERRIDE TOTALS (fix for backend override)
+// MAIN OVERRIDE
+// Send null if empty, number if manual
+if (form.mainDiamondTotal === "" || form.mainDiamondTotal === null) {
+  fd.append("mainDiamondTotal", "null");   // send null as string
+} else {
+  fd.append("mainDiamondTotal", String(form.mainDiamondTotal));
+}
+
+
+// Send null if empty, number if manual
+if (form.sideDiamondTotal === "" || form.sideDiamondTotal === null) {
+  fd.append("sideDiamondTotal", "null");
+} else {
+  fd.append("sideDiamondTotal", String(form.sideDiamondTotal));
+}
+
+
+
+
+
+      // prices/making charges
+      fd.append("prices", JSON.stringify(prices));
+      fd.append("makingChargesByCountry", JSON.stringify(makingChargesByCountry));
+
+      // variants map (only for base products)
+      if (!product.isVariant) {
+        const map = {};
+        variantList.forEach((v) => { if (v.label && v.id) map[v.label] = v.id; });
+        fd.append("variants", JSON.stringify(map));
+      }
+
+      // images & media
+      if (coverFile) fd.append("coverImage", coverFile);
+      if (newImagesFiles.length) newImagesFiles.forEach((f) => fd.append("images", f));
+      if (model3DFile) fd.append("model3D", model3DFile);
+      if (videoFile) fd.append("videoFile", videoFile);
+
+      if (imagesToAdd.length) fd.append("addImage", JSON.stringify(imagesToAdd));
+      if (imagesToRemove.length) fd.append("removeImage", JSON.stringify(imagesToRemove));
+
+      console.log("========== DEBUG FORM PAYLOAD ==========");
+console.log("mainDiamondTotal (raw):", form.mainDiamondTotal, "type:", typeof form.mainDiamondTotal);
+console.log("sideDiamondTotal (raw):", form.sideDiamondTotal, "type:", typeof form.sideDiamondTotal);
+
+console.log("diamondDetails:", diamondDetails);
+console.log("sideDiamondDetails:", sideDiamondDetails);
+
+console.log("Sending FormData entries:");
+for (let pair of fd.entries()) {
+  console.log(pair[0], "=>", pair[1]);
+}
+console.log("=========================================");
+
+      
+
+      // call update endpoint
+      const res = await axios.put(`${API_URL}/api/ornaments/edit/${product._id}`, fd, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
       });
 
-      if (Object.keys(prices).length > 0) {
-        data.append("prices", JSON.stringify(prices));
+      if (res.data?.success) {
+        alert(res.data.message || "Updated");
+        onSave?.();
+        onClose?.();
+      } else {
+        alert("Update returned unexpected response");
       }
-
-      if (Object.keys(makingChargesByCountry).length > 0) {
-        data.append("makingChargesByCountry", JSON.stringify(makingChargesByCountry));
-      }
-
-      if (model3D) {
-        data.append("model3D", model3D);
-      }
-      
-      if (videoFile) {
-        data.append("videoFile", videoFile);
-      }
-
-      if (["Diamond", "Gemstone", "Fashion"].includes(formData.categoryType)) {
-        const hasSideDetails = Object.values(sideDiamondDetails).some((v) => v && v !== "");
-        data.append("diamondDetails", JSON.stringify(diamondDetails));
-        data.append(
-          "sideDiamondDetails",
-          JSON.stringify(hasSideDetails ? sideDiamondDetails : diamondDetails)
-        );
-      }
-
-      if (variants.length > 0) {
-        const variantData = variants.map((v) => ({
-          color: v.color,
-          metalType: v.metalType,
-          size: v.size,
-        }));
-        data.append("variants", JSON.stringify(variantData));
-      }
-
-      await axios.put(
-        `${API_URL}/api/ornaments/edit/${product._id}`,
-        data,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-
-      alert("✅ Product updated successfully!");
-      onSave();
-      onClose();
     } catch (err) {
-      console.error("❌ Update Product Error:", err);
-      alert("❌ Failed to update product: " + (err.response?.data?.message || err.message));
+      console.error("Update error:", err);
+      alert("Failed to update: " + (err.response?.data?.message || err.message));
     } finally {
       setIsSaving(false);
     }
   };
 
+  /* ---------- UI ---------- */
   return (
-    <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-      onClick={(e) => e.target === e.currentTarget && onClose?.()}
-    >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-yellow-500 to-amber-600 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
-          <h2 className="text-2xl font-bold text-white">✏️ Edit Product</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-white hover:bg-white/20 px-3 py-1 rounded-lg transition-colors"
-          >
-            X
-          </button>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-auto" onClick={(e) => e.target === e.currentTarget && onClose?.()}>
+      <div className="bg-white rounded-2xl w-full max-w-6xl my-8 shadow-xl">
+        <div className="flex items-center justify-between p-4 bg-yellow-600 text-white rounded-t-2xl">
+          <h3 className="text-lg font-semibold">Edit Product — {product?.name}</h3>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-3 py-1 bg-white/20 rounded">Close</button>
+          </div>
         </div>
 
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="p-8 space-y-8">
-          {/* 3D Model */}
-          <div>
-            <label className="block text-sm font-medium mb-2">3D Model (.glb / .usdz)</label>
-            <input
-              type="file"
-              accept=".glb,.usdz"
-              onChange={handleModel3DChange}
-              className="text-sm"
-            />
-            {existingModel3D && !model3D && (
-              <p className="mt-2 text-sm text-green-600">✓ Current 3D model will be preserved unless you upload a new one</p>
-            )}
+        <form onSubmit={handleSave} className="p-6 space-y-6">
+          {/* BASIC ROW */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input name="name" value={form.name || ""} onChange={handleFormChange} className="border p-2 rounded" placeholder="Name" />
+
+            <select name="categoryType" value={form.categoryType || ""} onChange={handleFormChange} className="border p-2 rounded">
+              <option>Gold</option><option>Diamond</option><option>Gemstone</option><option>Fashion</option><option>Composite</option>
+            </select>
+
+            <select name="category" value={form.category || "rings"} onChange={handleFormChange} className="border p-2 rounded">
+              {CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            <select name="subCategory" value={form.subCategory || ""} onChange={handleFormChange} className="border p-2 rounded">
+              <option value="">— select subcategory —</option>
+              {(SUBCATEGORY_MAP[form.category] || []).map((sc) => <option key={sc} value={sc}>{sc}</option>)}
+            </select>
+
+            <select name="gender" value={form.gender || "Unisex"} onChange={handleFormChange} className="border p-2 rounded">
+              <option>Men</option><option>Women</option><option>Unisex</option>
+            </select>
+
+            <div className="flex gap-2">
+              <input name="price" type="number" value={form.price || 0} onChange={handleFormChange} placeholder="Price (INR)" className="border p-2 rounded flex-1" />
+              <input name="originalPrice" type="number" value={form.originalPrice || 0} onChange={handleFormChange} placeholder="Original Price" className="border p-2 rounded w-40" />
+            </div>
+
+            <input name="stock" type="number" value={form.stock || 1} onChange={handleFormChange} placeholder="Stock" className="border p-2 rounded" />
+
+            <label className="flex items-center gap-2"><input name="isFeatured" type="checkbox" checked={!!form.isFeatured} onChange={handleFormChange} /> Featured</label>
           </div>
 
-          {/* Video */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Product Video (MP4)</label>
-            <input
-              type="file"
-              accept="video/mp4"
-              onChange={handleVideoChange}
-              className="mt-2 text-sm"
-            />
-            {videoPreview && (
-              <video
-                src={videoPreview}
-                controls
-                className="mt-4 rounded-lg border shadow-md w-full max-h-64 object-cover"
-              />
-            )}
-            {videoPreview && !videoFile && (
-              <p className="mt-2 text-xs text-green-600">✓ Current video will be preserved unless you upload a new one</p>
-            )}
+          {/* METAL */}
+          <div className="border p-4 rounded">
+            <h4 className="font-semibold mb-2">Metal</h4>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+              <select value={metal.metalType || ""} onChange={(e) => updateMetal("metalType", e.target.value)} className="border p-2 rounded">
+                <option value="">— metal type —</option>
+                {METAL_TYPES.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+
+              <select value={metal.purity || ""} onChange={(e) => updateMetal("purity", e.target.value)} className="border p-2 rounded">
+                <option value="">— purity —</option>
+                {PURITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+
+              <input value={metal.weight || ""} onChange={(e) => updateMetal("weight", e.target.value)} placeholder="Weight (g)" className="border p-2 rounded" />
+
+              <input name="makingCharges" type="number" value={form.makingCharges || 0} onChange={handleFormChange} placeholder="Making Charges (INR)" className="border p-2 rounded" />
+            </div>
+            <div className="mt-2 text-sm text-gray-700">
+              Computed metal price preview: <b>₹{Number(calcGoldPrice(metal, pricingModel?.goldPrices || {})).toLocaleString()}</b>
+            </div>
           </div>
 
-          {/* Product Variants */}
-          <div className="border border-amber-300 rounded-xl p-6 bg-amber-50">
-            <h3 className="font-semibold text-lg mb-4 text-amber-700">🧩 Product Variants</h3>
+          {/* GEMSTONES */}
+          <div className="border p-4 rounded">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="font-semibold">Gemstones</h4>
+              <button type="button" onClick={addStone} className="px-2 py-1 bg-yellow-500 text-white rounded">+ Add</button>
+            </div>
 
-            {variants.map((variant, index) => (
-              <div
-                key={index}
-                className="border border-gray-300 p-4 rounded-xl mb-4 bg-white shadow-sm"
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-semibold text-gray-700">Variant {index + 1}</h4>
-                  <button
-                    type="button"
-                    onClick={() => removeVariant(index)}
-                    className="text-red-600 hover:underline text-sm font-medium"
-                  >
-                    Remove
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-sm font-medium">Color</label>
-                    <input
-                      type="text"
-                      value={variant.color || ""}
-                      onChange={(e) => handleVariantChange(index, "color", e.target.value)}
-                      className="w-full px-4 py-2 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Metal Type</label>
-                    <select
-                      value={variant.metalType || ""}
-                      onChange={(e) => handleVariantChange(index, "metalType", e.target.value)}
-                      className="w-full px-4 py-2 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-                    >
-                      <option value="">Select Metal</option>
-                      {METAL_TYPES.map((m) => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Size</label>
-                    <input
-                      type="text"
-                      value={variant.size || ""}
-                      onChange={(e) => handleVariantChange(index, "size", e.target.value)}
-                      className="w-full px-4 py-2 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-                    />
-                  </div>
-
-                   <div className="mt-4">
-      <label className="block text-sm font-medium mb-1">Variant Video (MP4)</label>
-      <input
-        type="file"
-        accept="video/mp4"
-        onChange={(e) => handleVariantVideoChange(index, e.target.files?.[0])}
-        className="text-sm"
-      />
-
-      {/* Show video preview if available */}
-      {variant.videoPreview && (
-        <video
-          src={variant.videoPreview}
-          controls
-          className="mt-3 w-full max-h-56 rounded-lg border shadow-md object-cover"
-        />
-      )}
-    </div>
-                </div>
+            {stones.map((s, idx) => (
+              <div key={idx} className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-2 p-2 bg-gray-50 rounded">
+                <input value={s.stoneType} onChange={(e) => updateStone(idx, "stoneType", e.target.value)} placeholder="Stone Type" className="border p-2 rounded" />
+                <input value={s.carat} onChange={(e) => updateStone(idx, "carat", e.target.value)} placeholder="Carat" className="border p-2 rounded" />
+                <input value={s.count} onChange={(e) => updateStone(idx, "count", e.target.value)} placeholder="Count" className="border p-2 rounded" />
+                <input value={s.pricePerCarat} onChange={(e) => updateStone(idx, "pricePerCarat", e.target.value)} placeholder="Price Per Carat (manual)" className="border p-2 rounded" />
+                <label className="flex items-center gap-2"><input type="checkbox" checked={s.useAuto !== false} onChange={(e) => updateStone(idx, "useAuto", e.target.checked)} /> Use auto</label>
+                <div className="col-span-full flex justify-end"><button type="button" onClick={() => removeStone(idx)} className="text-red-500">Remove</button></div>
               </div>
             ))}
 
-            <button
-              type="button"
-              onClick={addVariant}
-              className="mt-4 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium"
-            >
-              ➕ Add Variant
-            </button>
+            <div className="mt-2 text-sm text-gray-700">Gemstone cost preview (auto rates): <b>₹{Number(gemstonesPreview).toLocaleString()}</b></div>
           </div>
 
-          {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium mb-2">Product Name *</label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name || ""}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-                required
-              />
+          {/* DIAMONDS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border p-4 rounded">
+              <h4 className="font-semibold mb-2">Main Diamond</h4>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={diamondDetails.carat || ""} onChange={(e) => updateMainDiamond("carat", e.target.value)} placeholder="Carat" className="border p-2 rounded" />
+                <input value={diamondDetails.count || ""} onChange={(e) => updateMainDiamond("count", e.target.value)} placeholder="Count" className="border p-2 rounded" />
+
+                <select value={diamondDetails.color || ""} onChange={(e) => updateMainDiamond("color", e.target.value)} className="border p-2 rounded">
+                  <option value="">Color</option>
+                  {DIAMOND_COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+
+                <select value={diamondDetails.clarity || ""} onChange={(e) => updateMainDiamond("clarity", e.target.value)} className="border p-2 rounded">
+                  <option value="">Clarity</option>
+                  {DIAMOND_CLARITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+
+                <select value={diamondDetails.cut || ""} onChange={(e) => updateMainDiamond("cut", e.target.value)} className="border p-2 rounded">
+                  <option value="">Cut</option>
+                  {DIAMOND_CUTS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+
+                <input value={diamondDetails.pricePerCarat || ""} onChange={(e) => updateMainDiamond("pricePerCarat", e.target.value)} placeholder="Price Per Carat (manual)" className="border p-2 rounded" />
+
+                <label className="flex items-center gap-2 col-span-full">
+                  <input type="checkbox" checked={diamondDetails.useAuto !== false} onChange={(e) => updateMainDiamond("useAuto", e.target.checked)} /> Use auto pricing (backend diamondPricePerCarat)
+                </label>
+              </div>
+
+              <div className="mt-2 text-sm text-gray-700">Main diamond preview: <b>₹{Number(mainDiamondPreview).toLocaleString()}</b></div>
+              <div className="mt-2">
+  <label className="text-sm">Manual Main Diamond Total Override (INR)</label>
+  <input
+    type="text"
+    inputMode="numeric"
+    value={form.mainDiamondTotal ?? ""}
+    onChange={(e) =>
+      setForm((prev) => ({
+        ...prev,
+        mainDiamondTotal: e.target.value.trim()
+      }))
+    }
+    placeholder="Leave empty to use auto calculation"
+    className="border p-2 rounded w-full mt-1"
+  />
+</div>
+
+              <div className="mt-2">
+  <label className="text-sm">Manual Main Diamond Total Override (INR)</label>
+ <input
+  type="text"
+  inputMode="numeric"
+  value={form.mainDiamondTotal ?? ""}
+  onChange={(e) =>
+    setForm((prev) => ({
+      ...prev,
+      mainDiamondTotal: e.target.value.trim()
+    }))
+  }
+/>
+
+</div>
+
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Type *</label>
-              <select
-                name="type"
-                value={formData.type || "rings"}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              >
-                {Object.keys(subCategoryOptions).map((t) => (
-                  <option key={t} value={t}>{t}</option>
+            <div className="border p-4 rounded">
+              <h4 className="font-semibold mb-2">Side Diamonds</h4>
+              <div className="space-y-2">
+                {sideDiamondDetails.map((s, idx) => (
+                  <div key={idx} className="bg-gray-50 p-2 rounded">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={s.carat || ""} onChange={(e) => updateSideDiamond(idx, "carat", e.target.value)} placeholder="Carat" className="border p-2 rounded" />
+                      <input value={s.count || ""} onChange={(e) => updateSideDiamond(idx, "count", e.target.value)} placeholder="Count" className="border p-2 rounded" />
+                      <input value={s.pricePerCarat || ""} onChange={(e) => updateSideDiamond(idx, "pricePerCarat", e.target.value)} placeholder="Price Per Carat (manual)" className="border p-2 rounded" />
+                      <input value={s.clarity || ""} onChange={(e) => updateSideDiamond(idx, "clarity", e.target.value)} placeholder="Clarity" className="border p-2 rounded" />
+                      <input value={s.color || ""} onChange={(e) => updateSideDiamond(idx, "color", e.target.value)} placeholder="Color" className="border p-2 rounded" />
+                      <input value={s.cut || ""} onChange={(e) => updateSideDiamond(idx, "cut", e.target.value)} placeholder="Cut" className="border p-2 rounded" />
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={s.useAuto !== false} onChange={(e) => updateSideDiamond(idx, "useAuto", e.target.checked)} /> Auto</label>
+                    </div>
+                    <div className="mt-2 flex justify-end"><button type="button" onClick={() => removeSideDiamond(idx)} className="text-red-500">Remove</button></div>
+                  </div>
                 ))}
-              </select>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Gender *</label>
-              <select
-                name="gender"
-                value={formData.gender || "Unisex"}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              >
-                {["Men", "Women", "Unisex"].map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-            </div>
+                <div className="pt-2"><button type="button" onClick={addSideDiamond} className="px-3 py-1 bg-yellow-500 text-white rounded">+ Add Side Diamond</button></div>
+                <div className="mt-2 text-sm text-gray-700">Side diamond preview total: <b>₹{Number(sideDiamondPreview).toLocaleString()}</b></div>
+                <div className="mt-2">
+  <label className="text-sm">Manual Side Diamond Total Override (INR)</label>
+  <input
+    type="text"
+    inputMode="numeric"
+    value={form.sideDiamondTotal ?? ""}
+    onChange={(e) =>
+      setForm((prev) => ({
+        ...prev,
+        sideDiamondTotal: e.target.value.trim()
+      }))
+    }
+    placeholder="Leave empty to use auto calculation"
+    className="border p-2 rounded w-full mt-1"
+  />
+</div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Category *</label>
-              <select
-                name="category"
-                value={formData.category || "rings"}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              >
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Sub Category</label>
-              <select
-                name="subCategory"
-                value={formData.subCategory || ""}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              >
-                <option value="">-- Select Sub Category --</option>
-                {(subCategoryOptions[formData.category] || []).map((sub) => (
-                  <option key={sub} value={sub}>{sub}</option>
-                ))}
-              </select>
-            </div>
+                <div className="mt-2">
+  <label className="text-sm">Manual Side Diamond Total Override (INR)</label>
+<input
+  type="text"
+  inputMode="numeric"
+  value={form.sideDiamondTotal ?? ""}
+  onChange={(e) =>
+    setForm((prev) => ({
+      ...prev,
+      sideDiamondTotal: e.target.value.trim()
+    }))
+  }
+/>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Category Type *</label>
-              <select
-                name="categoryType"
-                value={formData.categoryType || "Gold"}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              >
-                {categoryTypeOptions.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </div>
+</div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Purity</label>
-              <input
-                type="text"
-                name="purity"
-                value={formData.purity || ""}
-                onChange={handleChange}
-                placeholder="e.g. 22K"
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Weight *</label>
-              <input
-                type="number"
-                name="weight"
-                value={formData.weight || ""}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Metal Type</label>
-              <select
-                name="metalType"
-                value={formData.metalType || ""}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              >
-                <option value="">-- Select Metal Type --</option>
-                {METAL_TYPES.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Stone Type</label>
-              <select
-                name="stoneType"
-                value={formData.stoneType || ""}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              >
-                <option value="">-- Select Stone Type --</option>
-                {STONE_TYPES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Style</label>
-              <select
-                name="style"
-                value={formData.style || ""}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              >
-                <option value="">-- Select Style --</option>
-                {STYLES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Size</label>
-              <input
-                type="text"
-                name="size"
-                value={formData.size || ""}
-                onChange={handleChange}
-                placeholder="e.g., 6, 7, 16 inch"
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Color</label>
-              <input
-                type="text"
-                name="color"
-                value={formData.color || ""}
-                onChange={handleChange}
-                placeholder="e.g., Rose Gold, D-Color, Blue"
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Base Price (INR) *</label>
-              <input
-                type="number"
-                name="price"
-                value={formData.price || ""}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Original Price (INR)</label>
-              <input
-                type="number"
-                name="originalPrice"
-                value={formData.originalPrice || ""}
-                onChange={handleChange}
-                placeholder="Enter MRP or old price"
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Discount (%)</label>
-              <input
-                type="number"
-                name="discount"
-                value={formData.discount || ""}
-                onChange={handleChange}
-                placeholder="Auto-calculated if left blank"
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Making Charges (INR)</label>
-              <input
-                type="number"
-                name="makingCharges"
-                value={formData.makingCharges || 0}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Stock *</label>
-              <input
-                type="number"
-                name="stock"
-                value={formData.stock || 1}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-                required
-              />
+              </div>
             </div>
           </div>
 
-          {/* Product Rating */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Product Rating</label>
-            <div className="flex items-center gap-2">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, rating: star }))}
-                  className={`text-3xl ${
-                    star <= (formData.rating || 0) ? "text-yellow-400" : "text-gray-300"
-                  } hover:scale-110 transition-transform`}
-                >
-                  ★
-                </button>
+          {/* PRICES & MAKING (currency prices / making charges) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border p-3 rounded">
+              <h4 className="font-semibold mb-2">Currency Prices</h4>
+              {Object.entries(prices || {}).length === 0 && <p className="text-sm text-gray-500">No additional prices set</p>}
+              {Object.entries(prices || {}).map(([code, info]) => (
+                <div key={code} className="flex gap-2 items-center mb-2">
+                  <div className="w-20 font-medium">{code}</div>
+                  <input value={info.amount} onChange={(e) => handlePriceCurrency(code, info.symbol, e.target.value)} className="border p-2 rounded flex-1" />
+                </div>
+              ))}
+            </div>
+
+            <div className="border p-3 rounded">
+              <h4 className="font-semibold mb-2">Making Charges by Country</h4>
+              {Object.entries(makingChargesByCountry || {}).length === 0 && <p className="text-sm text-gray-500">No overrides set</p>}
+              {Object.entries(makingChargesByCountry || {}).map(([code, info]) => (
+                <div key={code} className="flex gap-2 items-center mb-2">
+                  <div className="w-20 font-medium">{code}</div>
+                  <input value={info.amount} onChange={(e) => handleMakingCharge(code, info.symbol, e.target.value)} className="border p-2 rounded flex-1" />
+                </div>
               ))}
             </div>
           </div>
 
-          {/* Multi-Currency Prices */}
-          <div className="border border-gray-200 rounded-xl p-6 bg-gray-50">
-            <h3 className="text-lg font-semibold mb-4 text-gray-700">💰 Multi-Currency Prices</h3>
-            {currencyList.map(({ code, symbol, flag, country }) => (
-              <div key={code} className="flex items-center gap-3 mb-3">
-                <div className="w-40 flex items-center gap-2 px-3 py-2 border rounded-lg bg-white">
-                  <span className="text-xl">{flag}</span>
-                  <span className="font-medium text-sm">{code} ({symbol})</span>
+          {/* VARIANT LINKS (unchanged) */}
+          {!product.isVariant && (
+            <div className="border p-4 rounded">
+              <h4 className="font-semibold mb-2">Variant Links</h4>
+
+              <div className="mb-3">
+                <input id="variantLinkInput" placeholder="label:id OR id" className="border p-2 rounded w-full" />
+                <div className="flex gap-2 mt-2">
+                  <button type="button" onClick={() => { const el = document.getElementById("variantLinkInput"); addVariantLinkFromInput(el?.value?.trim()); if (el) el.value = ""; }} className="px-3 py-1 bg-green-500 text-white rounded">Add</button>
+                  <small className="text-xs text-gray-500">Use label:id or paste variant id</small>
                 </div>
-                <input
-                  type="number"
-                  placeholder={`Enter making charge (${country})`}
-                  value={makingChargesByCountry[code]?.amount || ""}
-                  onChange={(e) => handleMakingChargeChange(code, symbol, e.target.value)}
-                  className="flex-1 px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-                />
               </div>
-            ))}
-          </div>
 
-          {/* Stone Details */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Stone Details</label>
-            <textarea
-              name="stoneDetails"
-              value={formData.stoneDetails || ""}
-              onChange={handleChange}
-              rows={3}
-              placeholder="Enter stone information, e.g., type, weight, cut, clarity..."
-              className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-            ></textarea>
-          </div>
+              <div className="border p-3 rounded bg-gray-50 mb-3">
+                <div className="flex gap-2 items-center mb-2">
+                  <input value={variantSearchQuery} onChange={(e) => setVariantSearchQuery(e.target.value)} placeholder="Search cached variants (name / sku / metal / label / color)" className="border p-2 rounded flex-1" />
+                  <button type="button" onClick={() => setVariantSearchQuery("")} className="px-3 py-1 bg-gray-200 rounded">Clear</button>
+                </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Description</label>
-            <textarea
-              name="description"
-              value={formData.description || ""}
-              onChange={handleChange}
-              rows={4}
-              placeholder="Enter product description..."
-              className="w-full px-4 py-3 border-2 rounded-xl focus:border-yellow-500 focus:outline-none"
-            ></textarea>
-          </div>
+                <div className="flex gap-2 text-xs mb-2">
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={variantFilterFields.byName} onChange={(e) => setVariantFilterFields(f => ({ ...f, byName: e.target.checked }))} /> Name</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={variantFilterFields.bySku} onChange={(e) => setVariantFilterFields(f => ({ ...f, bySku: e.target.checked }))} /> SKU</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={variantFilterFields.byMetal} onChange={(e) => setVariantFilterFields(f => ({ ...f, byMetal: e.target.checked }))} /> Metal</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={variantFilterFields.byLabel} onChange={(e) => setVariantFilterFields(f => ({ ...f, byLabel: e.target.checked }))} /> Label</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={variantFilterFields.byColor} onChange={(e) => setVariantFilterFields(f => ({ ...f, byColor: e.target.checked }))} /> Color</label>
+                </div>
 
-          {/* Featured Checkbox */}
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              name="isFeatured"
-              checked={formData.isFeatured || false}
-              onChange={handleChange}
-              className="w-5 h-5 text-yellow-500 border-2 rounded cursor-pointer"
-            />
-            <label className="text-sm font-medium text-gray-700 cursor-pointer">
-              Featured Product
-            </label>
-          </div>
+                <div className="max-h-60 overflow-auto bg-white rounded">
+                  {variantSearchLoading && <div className="p-2 text-sm text-gray-500">Loading variants...</div>}
+                  {!variantSearchLoading && variantSearchResults.length === 0 && variantSearchQuery && <div className="p-2 text-sm text-gray-500">No matches</div>}
 
-         {/* Diamond Details (Only for Diamond/Gemstone/Fashion) */}
-          {["Diamond", "Gemstone", "Fashion"].includes(formData.categoryType) && (
-            <div className="space-y-6">
-              {/* Main Diamond Details */}
-              <div className="border-2 border-yellow-300 rounded-xl p-6 bg-yellow-50">
-                <h3 className="font-semibold text-lg mb-4 text-yellow-700">💎 Main Diamond Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {Object.keys(diamondDetails).map((key) => (
-                    <div key={key}>
-                      <label className="block text-sm font-medium mb-1 capitalize">
-                        {key.replace(/([A-Z])/g, " $1")}
-                      </label>
-                      <input
-                        type="text"
-                        name={key}
-                        value={diamondDetails[key] || ""}
-                        onChange={(e) => handleDiamondChange(e, false)}
-                        className="w-full px-4 py-2 border-2 rounded-lg focus:border-yellow-500 focus:outline-none"
-                        placeholder={`Enter ${key.replace(/([A-Z])/g, " $1").toLowerCase()}`}
-                      />
+                  {variantSearchResults.map((v) => (
+                    <div key={v._id} className="flex items-center justify-between p-2 border-b">
+                      <div>
+                        <div className="font-medium">{v.name}</div>
+                        <div className="text-xs text-gray-500">{v._id} • {v.metal?.metalType || v.variantLabel || ""}</div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => addVariantLinkFromObject(v)} className="px-3 py-1 bg-green-600 text-white rounded">Link</button>
+                        <a href={`/admin/variant/${v._id}`} target="_blank" rel="noreferrer" className="px-3 py-1 bg-gray-200 rounded">Open</a>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Side Diamond Details */}
-              <div className="border-2 border-amber-300 rounded-xl p-6 bg-amber-50">
-                <h3 className="font-semibold text-lg mb-4 text-amber-700">💎 Side Diamond Details (Optional)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {Object.keys(sideDiamondDetails).map((key) => (
-                    <div key={key}>
-                      <label className="block text-sm font-medium mb-1 capitalize">
-                        {key.replace(/([A-Z])/g, " $1")}
-                      </label>
-                      <input
-                        type="text"
-                        name={key}
-                        value={sideDiamondDetails[key] || ""}
-                        onChange={(e) => handleDiamondChange(e, true)}
-                        className="w-full px-4 py-2 border-2 rounded-lg focus:border-amber-500 focus:outline-none"
-                        placeholder={`Enter ${key.replace(/([A-Z])/g, " $1").toLowerCase()}`}
-                      />
+              <div className="space-y-2">
+                {variantList.length === 0 && <div className="text-sm text-gray-500">No variants linked</div>}
+                {variantList.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between p-2 bg-white border rounded">
+                    <div>
+                      <div className="font-medium">{v.label}</div>
+                      <div className="text-xs text-gray-500">{v.id}</div>
                     </div>
-                  ))}
-                </div>
+                    <div className="flex gap-2">
+                      <a href={`/admin/variant/${v.id}`} target="_blank" rel="noreferrer" className="px-2 py-1 bg-gray-200 rounded text-xs">Open</a>
+                      <button type="button" onClick={() => removeVariantLink(v.id)} className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs">Remove</button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
-          
 
-          {/* Submit Button */}
-          <div className="text-right">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className={`px-6 py-3 rounded-xl text-white font-medium ${
-                isSaving ? "bg-gray-400 cursor-not-allowed" : "bg-yellow-500 hover:bg-yellow-600"
-              } transition-colors`}
-            >
-              {isSaving ? "Saving..." : "Save Changes"}
-            </button>
+          {/* MEDIA */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium">Replace Cover Image</label>
+              <input type="file" accept="image/*" onChange={onCoverFileChange} />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium">Gallery (replace)</label>
+              <input type="file" accept="image/*" multiple onChange={onNewImagesChange} />
+              <div className="mt-2 flex gap-2 overflow-auto">
+                {existingImages.map((url) => (
+                  <div key={url} className="relative">
+                    <img src={url} alt="exist" className="w-20 h-20 object-cover rounded" />
+                    <label className="absolute top-0 right-0 bg-white p-1 rounded">
+                      <input type="checkbox" checked={imagesToRemove.includes(url)} onChange={() => markImageToRemove(url)} />
+                    </label>
+                  </div>
+                ))}
+                {newImagesFiles.map((f, i) => (<img key={`new-${i}`} src={URL.createObjectURL(f)} className="w-20 h-20 rounded object-cover" alt="new" />))}
+              </div>
+
+              <div className="mt-2">
+                <input id="imgUrlInput" placeholder="Add image URL to append" className="border p-2 rounded w-full" />
+                <div className="flex gap-2 mt-2">
+                  <button type="button" onClick={() => { const el = document.getElementById("imgUrlInput"); addImageUrlToAdd(el?.value?.trim()); if (el) el.value = ""; }} className="px-3 py-1 bg-green-500 text-white rounded">Append</button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium">3D Model (.glb/.usdz)</label>
+              <input type="file" accept=".glb,.usdz" onChange={onModel3DChange} />
+              <label className="block text-sm font-medium mt-3">Product Video (MP4)</label>
+              <input type="file" accept="video/mp4" onChange={onVideoChange} />
+            </div>
+          </div>
+
+          {/* ACTIONS */}
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
+            <button type="submit" disabled={isSaving} className="px-4 py-2 bg-yellow-500 text-white rounded">{isSaving ? "Saving..." : "Save Changes"}</button>
           </div>
         </form>
       </div>
     </div>
   );
-} 
+}

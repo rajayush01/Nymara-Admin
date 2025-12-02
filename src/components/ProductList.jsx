@@ -5,7 +5,9 @@ import ProductDetailsModal from "./ProductDetailsModal";
 
 const TYPE_OPTIONS = ["Ring", "Necklace", "Chain", "Bracelet", "Earring", "Pendant", "Bangle", "Other"];
 const GENDER_OPTIONS = ["Men", "Women", "Unisex"];
-const CATEGORY_OPTIONS = ["Gold", "Diamond", "Gemstone", "Fashion"];
+
+/* Category types mapping to backend categoryType (exact strings expected by backend) */
+const CATEGORY_TYPE_OPTIONS = ["Gold", "Diamond", "Gemstone", "Fashion", "Composite"];
 
 const SUBCATEGORY_MAP = {
   Ring: ["Engagement Rings", "Wedding Rings", "Eternity Band", "Cocktail Rings", "Fashion Rings"],
@@ -37,9 +39,9 @@ const CURRENCY_OPTIONS = [
   { code: "JPY", symbol: "¥" },
 ];
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "";
 
-// 🔥 Subcategory → backend mapping
+// Subcategory frontend -> backend code map (lowercase keys)
 const SUB_MAP = {
   "engagement rings": "engagement",
   "wedding rings": "wedding",
@@ -66,62 +68,65 @@ export default function ProductList() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [viewingProductId, setViewingProductId] = useState(null);
   const [loading, setLoading] = useState(false);
+
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
   // Filters
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
+  const [categoryType, setCategoryType] = useState(""); // backend categoryType (Gold, Diamond...)
+  const [type, setType] = useState(""); // frontend Type (Ring, Necklace...)
   const [subCategory, setSubCategory] = useState("");
-  const [type, setType] = useState("");
   const [gender, setGender] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState("");
   const [currency, setCurrency] = useState("INR");
 
-  const normalize = (val) => val?.trim().toLowerCase() || "";
+  const normalize = (val) => (val ? String(val).trim().toLowerCase() : "");
 
   const fetchProducts = async () => {
     setLoading(true);
-
     try {
-      // Normalize type → backend (Ring → rings)
-      const typeNormalized = type ? normalize(type) + "s" : "";
+      // category (backend expects plural lowercase like "rings", "earrings")
+      const category = type ? normalize(type) + "s" : "";
 
-      // Normalize subCategory → backend
-      const subNormalized =
-        subCategory && SUB_MAP[normalize(subCategory)]
-          ? SUB_MAP[normalize(subCategory)]
-          : "";
+      // subcategory: map friendly UI label to backend code (if provided)
+      const subNormalized = subCategory
+        ? SUB_MAP[normalize(subCategory)] || normalize(subCategory)
+        : "";
 
+      // categoryType: backend expects "Gold" etc; send exact string (preserve case)
       const params = {
-        search,
-        category: normalize(category),
-        type: typeNormalized,
-        subCategory: subNormalized,
-        gender,
-        minPrice,
-        maxPrice,
-        sort,
-        currency,
+        search: search || undefined,
+        gender: gender || undefined, // backend expects "Men"/"Women"/"Unisex"
+        categoryType: categoryType || undefined,
+        category: category || undefined,
+        subCategory: subNormalized || undefined,
+        minPrice: minPrice || undefined,
+        maxPrice: maxPrice || undefined,
+        sort: sort || undefined,
+        currency: currency || "INR",
         page,
         limit: 50,
       };
 
-      const token = localStorage.getItem("token");
+      // remove undefined fields so query is clean
+      Object.keys(params).forEach((k) => params[k] === undefined && delete params[k]);
 
+      const token = localStorage.getItem("token");
       const res = await axios.get(`${API_URL}/api/ornaments/`, {
         params,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
-      setProducts(res.data.ornaments || []);
-      setTotalPages(res.data.totalPages || 1);
+      const resOrnaments = res?.data?.ornaments || [];
+      setProducts(resOrnaments);
+      setTotalPages(res?.data?.totalPages ? Number(res.data.totalPages) : 1);
     } catch (err) {
       console.error("Fetch Error:", err.response?.data || err.message);
+      setProducts([]);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -130,21 +135,22 @@ export default function ProductList() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency]);
+  }, [search, categoryType, type, subCategory, gender, minPrice, maxPrice, sort, currency]);
 
-  // Fetch after page change or filter change
+  // Fetch after page or filter change
   useEffect(() => {
     fetchProducts();
-  }, [search, category, subCategory, type, gender, minPrice, maxPrice, sort, currency, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, categoryType, type, subCategory, gender, minPrice, maxPrice, sort, currency, page]);
 
   const deleteProduct = async (id) => {
     if (!window.confirm("Delete this product?")) return;
 
     try {
+      const token = localStorage.getItem("token");
       await axios.delete(`${API_URL}/api/ornaments/delete/${id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       fetchProducts();
     } catch (err) {
       console.error("Delete Error:", err.response?.data || err.message);
@@ -152,12 +158,54 @@ export default function ProductList() {
     }
   };
 
+  // Helper to display currency + amount safely
+// FINAL PRICE (matches backend logic)
+const renderPrice = (item) => {
+  // Backend sends currencySymbol → correct symbol
+  const symbol =
+    item.currencySymbol ||
+    item.currency ||
+    "";
+
+  // FINAL price priority → EXACT match to backend design
+  const final =
+    item.totalConvertedPrice ??    // includes making charges, diamonds, stones (correct)
+    item.displayPrice ??           // base converted price
+    item.price ??                  // raw db price (fallback)
+    0;
+
+  const n = Number(final);
+  return `${symbol}${Number.isFinite(n) ? n.toLocaleString() : final}`;
+};
+
+
+
+// ORIGINAL PRICE (strike-through price)
+const renderOriginalPrice = (item) => {
+  const symbol =
+    item.currencySymbol ||
+    item.currency ||
+    "";
+
+  const original =
+    item.originalConvertedPrice ??  // backend converted original price
+    item.originalPrice ??          // raw original price
+    null;
+
+  if (!original || Number(original) <= 0) return null;
+
+  const n = Number(original);
+  return `${symbol}${Number.isFinite(n) ? n.toLocaleString() : original}`;
+};
+
+
   return (
     <div>
       <h2 className="text-2xl font-bold text-yellow-700 mb-4">📜 Products</h2>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-6 items-end">
+
         <input
           type="text"
           placeholder="Search..."
@@ -166,9 +214,13 @@ export default function ProductList() {
           className="border p-2 rounded flex-1"
         />
 
-        <select value={category} onChange={(e) => setCategory(e.target.value)} className="border p-2 rounded">
+        <select
+          value={categoryType}
+          onChange={(e) => setCategoryType(e.target.value)}
+          className="border p-2 rounded"
+        >
           <option value="">All Categories</option>
-          {CATEGORY_OPTIONS.map((c) => (
+          {CATEGORY_TYPE_OPTIONS.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
@@ -245,28 +297,38 @@ export default function ProductList() {
 
                 <div className="mt-1">
                   <span className="text-lg font-semibold">
-                    {p.currency}{p.displayPrice?.toLocaleString()}
+                    {renderPrice(p)}
                   </span>
+{
+  Number(p.originalConvertedPrice ?? p.originalPrice ?? 0) >
+    Number(p.totalConvertedPrice ?? p.displayPrice ?? p.price ?? 0) && (
+    <span className="ml-2 line-through text-sm text-gray-500">
+      {renderOriginalPrice(p)}
+    </span>
+  )
+}
 
-                  {p.originalPrice > p.displayPrice && (
-                    <span className="ml-2 line-through text-sm text-gray-500">
-                      {p.currency}{p.originalPrice?.toLocaleString()}
-                    </span>
-                  )}
 
                   {p.discount > 0 && (
                     <span className="ml-2 text-red-500">({p.discount}% OFF)</span>
                   )}
                 </div>
 
-                <p className="text-sm text-gray-600 mt-1">{p.category} | {p.type}</p>
+                <p className="text-sm text-gray-600 mt-1">{p.category} | {p.type || p.category}</p>
                 <p className="mt-2 text-gray-700 line-clamp-2">{p.description}</p>
 
                 <div className="flex justify-between mt-4">
-                  <button onClick={(e) => { e.stopPropagation(); setEditingProduct(p); }} className="px-3 py-1 bg-yellow-200 rounded hover:bg-yellow-300">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditingProduct(p); }}
+                    className="px-3 py-1 bg-yellow-200 rounded hover:bg-yellow-300"
+                  >
                     Edit
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); deleteProduct(p._id); }} className="px-3 py-1 bg-red-500 text-white rounded">
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteProduct(p._id); }}
+                    className="px-3 py-1 bg-red-500 text-white rounded"
+                  >
                     Delete
                   </button>
                 </div>
@@ -282,7 +344,11 @@ export default function ProductList() {
           <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-2 border rounded">◀ Prev</button>
 
           {Array.from({ length: totalPages }).map((_, i) => (
-            <button key={i} onClick={() => setPage(i + 1)} className={`px-3 py-2 border rounded ${page === i + 1 ? "bg-yellow-400 text-white" : ""}`}>
+            <button
+              key={i}
+              onClick={() => setPage(i + 1)}
+              className={`px-3 py-2 border rounded ${page === i + 1 ? "bg-yellow-400 text-white" : ""}`}
+            >
               {i + 1}
             </button>
           ))}
@@ -291,12 +357,20 @@ export default function ProductList() {
         </div>
       )}
 
+      {/* Modals */}
       {editingProduct && (
-        <EditProductModal product={editingProduct} onClose={() => setEditingProduct(null)} onSave={fetchProducts} />
+        <EditProductModal
+          product={editingProduct}
+          onClose={() => setEditingProduct(null)}
+          onSave={fetchProducts}
+        />
       )}
 
       {viewingProductId && (
-        <ProductDetailsModal productId={viewingProductId} onClose={() => setViewingProductId(null)} />
+        <ProductDetailsModal
+          productId={viewingProductId}
+          onClose={() => setViewingProductId(null)}
+        />
       )}
     </div>
   );

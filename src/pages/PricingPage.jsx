@@ -5,12 +5,34 @@ const API_URL = import.meta.env.VITE_API_URL;
 export default function PricingPage() {
   const [goldPrices, setGoldPrices] = useState({ "14K": "", "18K": "", "22K": "" });
   const [diamondPrice, setDiamondPrice] = useState("");
+  // ⭐ Gemstone dynamic price map
+  const [gemstonePrices, setGemstonePrices] = useState({});
+  // ⭐ Available gemstone types fetched automatically
+  const [availableStones, setAvailableStones] = useState([]);
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [currentPricing, setCurrentPricing] = useState(null);
   const [loadingPricing, setLoadingPricing] = useState(true);
+  const [platinumPrice, setPlatinumPrice] = useState("");
+  const [silver925Price, setSilver925Price] = useState("");
+  const [goldVermeilPrice, setGoldVermeilPrice] = useState("");
+
 
   const API_BASE = `${API_URL}/api/ornaments/pricing`;
+
+  const GEMSTONE_TYPES = [
+    "Emerald",
+    "Ruby",
+    "Sapphire",
+    "Topaz",
+    "Amethyst",
+    "Garnet",
+    "Opal",
+    "Turquoise",
+    "Pearl"
+  ];
+
 
   // 🔹 Fetch current pricing on load
   useEffect(() => {
@@ -33,8 +55,23 @@ export default function PricingPage() {
           });
         }
 
+
+        if (data.pricing?.platinumPricePerGram)
+          setPlatinumPrice(data.pricing.platinumPricePerGram);
+
+        if (data.pricing?.silver925PricePerGram)
+          setSilver925Price(data.pricing.silver925PricePerGram);
+
+        if (data.pricing?.goldVermeilPricePerGram)
+          setGoldVermeilPrice(data.pricing.goldVermeilPricePerGram);
+
         if (data.pricing?.diamondPricePerCarat)
           setDiamondPrice(data.pricing.diamondPricePerCarat);
+
+        if (data.pricing?.gemstonePrices) {
+          setGemstonePrices(data.pricing.gemstonePrices);
+        }
+
       } catch (err) {
         console.error("Fetch Pricing Error:", err);
       } finally {
@@ -61,9 +98,21 @@ export default function PricingPage() {
           "14K": goldPrices["14K"] ? Number(goldPrices["14K"]) : undefined,
           "18K": goldPrices["18K"] ? Number(goldPrices["18K"]) : undefined,
           "22K": goldPrices["22K"] ? Number(goldPrices["22K"]) : undefined,
+
+
         },
+
+        platinumPricePerGram: platinumPrice ? Number(platinumPrice) : undefined,
+        silver925PricePerGram: silver925Price ? Number(silver925Price) : undefined,
+        goldVermeilPricePerGram: goldVermeilPrice ? Number(goldVermeilPrice) : undefined,
+
         diamondPricePerCarat: diamondPrice ? Number(diamondPrice) : undefined,
+
+        // ⭐ ADD THIS
+        gemstonePrices:
+          Object.keys(gemstonePrices).length > 0 ? gemstonePrices : undefined,
       };
+
 
       const response = await fetch(API_BASE, {
         method: "PUT",
@@ -109,6 +158,19 @@ export default function PricingPage() {
                 <span className="font-semibold">Diamond Price per Carat:</span>{" "}
                 ₹{currentPricing.diamondPricePerCarat}
               </p>
+
+              <p className="text-gray-700 mt-2">
+                <span className="font-semibold">Platinum:</span> ₹{currentPricing.platinumPricePerGram}
+              </p>
+
+              <p className="text-gray-700">
+                <span className="font-semibold">925 Silver:</span> ₹{currentPricing.silver925PricePerGram}
+              </p>
+
+              <p className="text-gray-700">
+                <span className="font-semibold">Gold Vermeil:</span> ₹{currentPricing.goldVermeilPricePerGram}
+              </p>
+
             </div>
           ) : (
             <p className="text-red-500">⚠️ No pricing data found</p>
@@ -117,11 +179,10 @@ export default function PricingPage() {
 
         {message && (
           <div
-            className={`mb-4 px-4 py-3 rounded-lg ${
-              message.type === "success"
+            className={`mb-4 px-4 py-3 rounded-lg ${message.type === "success"
                 ? "bg-green-100 text-green-700"
                 : "bg-red-100 text-red-700"
-            }`}
+              }`}
           >
             {message.text}
           </div>
@@ -163,6 +224,143 @@ export default function PricingPage() {
               placeholder="Enter diamond price per carat"
             />
           </div>
+
+          {/* NEW — Metal Prices */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-800">Other Metal Prices (₹ per gram)</h3>
+
+            {/* Platinum */}
+            <div className="flex items-center gap-3">
+              <span className="w-40 font-semibold">Platinum</span>
+              <input
+                type="number"
+                value={platinumPrice}
+                onChange={(e) => setPlatinumPrice(e.target.value)}
+                className="flex-1 px-4 py-3 border-2 rounded-xl focus:border-yellow-500 outline-none"
+                placeholder="Enter platinum price per gram"
+              />
+            </div>
+
+            {/* 925 Sterling Silver */}
+            <div className="flex items-center gap-3">
+              <span className="w-40 font-semibold">925 Sterling Silver</span>
+              <input
+                type="number"
+                value={silver925Price}
+                onChange={(e) => setSilver925Price(e.target.value)}
+                className="flex-1 px-4 py-3 border-2 rounded-xl focus:border-yellow-500 outline-none"
+                placeholder="Enter silver price per gram"
+              />
+            </div>
+
+            {/* Gold Vermeil */}
+            <div className="flex items-center gap-3">
+              <span className="w-40 font-semibold">Gold Vermeil</span>
+              <input
+                type="number"
+                value={goldVermeilPrice}
+                onChange={(e) => setGoldVermeilPrice(e.target.value)}
+                className="flex-1 px-4 py-3 border-2 rounded-xl focus:border-yellow-500 outline-none"
+                placeholder="Enter gold vermeil price per gram"
+              />
+            </div>
+          </div>
+
+
+          {/* Gemstone Prices */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Gemstone Prices per Carat (₹)
+            </label>
+
+            <div className="space-y-3">
+
+              {/* Gemstone Prices */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Gemstone Prices per Carat (₹)
+                </label>
+
+                <div className="space-y-3">
+
+                  {/* Dropdown */}
+                  <div className="flex gap-3 items-center">
+                    <select
+                      className="px-3 py-2 border rounded"
+                      onChange={(e) => {
+                        const st = e.target.value;
+                        if (st && !gemstonePrices[st]) {
+                          setGemstonePrices((prev) => ({ ...prev, [st]: 0 }));
+
+                        }
+                      }}
+                    >
+                      <option value="">Select Gemstone</option>
+                      {GEMSTONE_TYPES.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Render gemstone inputs */}
+                  {Object.entries(gemstonePrices).map(([stone, value]) => (
+                    <div key={stone} className="flex items-center gap-3">
+                      <span className="w-28 font-semibold">{stone}</span>
+
+                      <input
+                        type="number"
+                        value={value}
+                        onChange={(e) =>
+                          setGemstonePrices((prev) => ({
+                            ...prev,
+                            [stone]: Number(e.target.value),
+                          }))
+                        }
+                        className="flex-1 px-4 py-3 border-2 rounded-xl focus:border-yellow-500 outline-none"
+                        placeholder={`Enter ${stone} price`}
+                      />
+
+                      <button
+                        className="text-red-500 text-sm"
+                        onClick={() =>
+                          setGemstonePrices((prev) => {
+                            const clone = { ...prev };
+                            delete clone[stone];
+                            return clone;
+                          })
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional: Add new gemstone manually */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Add Gemstone (e.g. Emerald)"
+                  className="px-3 py-2 border rounded"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const st = e.target.value.trim();
+                      if (st !== "" && !gemstonePrices[st]) {
+                        setGemstonePrices((prev) => ({ ...prev, [st]: 0 }));
+
+                      }
+                      e.target.value = "";
+                    }
+                  }}
+                />
+              </div>
+
+            </div>
+          </div>
+
 
           {/* Submit */}
           <div className="flex justify-end">
