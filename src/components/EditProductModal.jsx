@@ -549,31 +549,70 @@ console.log("=========================================");
         <form onSubmit={handleSave} className="p-6 space-y-6">
           {/* BASIC ROW */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+           <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Product Name</label>
             <input name="name" value={form.name || ""} onChange={handleFormChange} className="border p-2 rounded" placeholder="Name" />
+           </div>
+
+           <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Ornament Type </label>
 
             <select name="categoryType" value={form.categoryType || ""} onChange={handleFormChange} className="border p-2 rounded">
               <option>Gold</option><option>Diamond</option><option>Gemstone</option><option>Fashion</option><option>Composite</option>
             </select>
+           </div>
+
+           <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Category Type</label>
 
             <select name="category" value={form.category || "rings"} onChange={handleFormChange} className="border p-2 rounded">
               {CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
+           </div>
+
+           <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">SubCategory Type</label>
 
             <select name="subCategory" value={form.subCategory || ""} onChange={handleFormChange} className="border p-2 rounded">
               <option value="">— select subcategory —</option>
               {(SUBCATEGORY_MAP[form.category] || []).map((sc) => <option key={sc} value={sc}>{sc}</option>)}
             </select>
+           </div>
+
+           <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Gender</label>
 
             <select name="gender" value={form.gender || "Unisex"} onChange={handleFormChange} className="border p-2 rounded">
               <option>Men</option><option>Women</option><option>Unisex</option>
             </select>
 
+           </div>
+
             <div className="flex gap-2">
+             <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Selling Price</label>
               <input name="price" type="number" value={form.price || 0} onChange={handleFormChange} placeholder="Price (INR)" className="border p-2 rounded flex-1" />
+             </div>
+             <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Original Price</label>
               <input name="originalPrice" type="number" value={form.originalPrice || 0} onChange={handleFormChange} placeholder="Original Price" className="border p-2 rounded w-40" />
+             </div>
             </div>
 
+           <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Stock</label>
+
             <input name="stock" type="number" value={form.stock || 1} onChange={handleFormChange} placeholder="Stock" className="border p-2 rounded" />
+           </div>
 
             <label className="flex items-center gap-2"><input name="isFeatured" type="checkbox" checked={!!form.isFeatured} onChange={handleFormChange} /> Featured</label>
           </div>
@@ -587,14 +626,29 @@ console.log("=========================================");
                 {METAL_TYPES.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
 
+             <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Purity</label>
+
               <select value={metal.purity || ""} onChange={(e) => updateMetal("purity", e.target.value)} className="border p-2 rounded">
                 <option value="">— purity —</option>
                 {PURITIES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
+             </div>
+
+             <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Weight</label>
 
               <input value={metal.weight || ""} onChange={(e) => updateMetal("weight", e.target.value)} placeholder="Weight (g)" className="border p-2 rounded" />
+             </div>
+
+             <div className="flex flex-col">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Making Charges</label>
 
               <input name="makingCharges" type="number" value={form.makingCharges || 0} onChange={handleFormChange} placeholder="Making Charges (INR)" className="border p-2 rounded" />
+             </div>
             </div>
             <div className="mt-2 text-sm text-gray-700">
               Computed metal price preview: <b>₹{Number(calcGoldPrice(metal, pricingModel?.goldPrices || {})).toLocaleString()}</b>
