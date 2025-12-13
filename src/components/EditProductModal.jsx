@@ -643,12 +643,35 @@ console.log("=========================================");
               <input value={metal.weight || ""} onChange={(e) => updateMetal("weight", e.target.value)} placeholder="Weight (g)" className="border p-2 rounded" />
              </div>
 
-             <div className="flex flex-col">
+             {/* <div className="flex flex-col">
 
               <label className="text-sm font-semibold text-gray-700 mb-1">Making Charges</label>
 
               <input name="makingCharges" type="number" value={form.makingCharges || 0} onChange={handleFormChange} placeholder="Making Charges (INR)" className="border p-2 rounded" />
-             </div>
+             </div> */}
+
+             <div className="flex flex-col">
+  <label className="text-sm font-semibold text-gray-700 mb-1">
+    Making Charges
+  </label>
+
+  <input
+    name="makingCharges"
+    type="text"
+    inputMode="numeric"
+    pattern="[0-9]*"
+    value={form.makingCharges ?? ""}
+    onChange={(e) => {
+      const value = e.target.value.replace(/\D/g, "");
+      handleFormChange({
+        target: { name: "makingCharges", value }
+      });
+    }}
+    placeholder="Making Charges (INR)"
+    className="border p-2 rounded"
+  />
+</div>
+
             </div>
             <div className="mt-2 text-sm text-gray-700">
               Computed metal price preview: <b>₹{Number(calcGoldPrice(metal, pricingModel?.goldPrices || {})).toLocaleString()}</b>
