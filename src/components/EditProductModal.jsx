@@ -187,14 +187,38 @@ setForm((f) => ({
   }, []);
 
   /* ---------- load variants cache once (frontend search) ---------- */
-  useEffect(() => {
+  // useEffect(() => {
+  //   let cancelled = false;
+  //   const load = async () => {
+  //     setVariantSearchLoading(true);
+  //     try {
+  //       const token = localStorage.getItem("token");
+  //       const res = await axios.get(`${API_URL}/api/ornaments`, {
+  //         params: { isVariant: true, limit: 500 },
+  //         headers: { Authorization: `Bearer ${token}` },
+  //       });
+  //       if (cancelled) return;
+  //       const list = res.data?.ornaments || [];
+  //       setAllVariantsCache(list);
+  //     } catch (err) {
+  //       console.error("Failed to fetch variants cache:", err);
+  //       setAllVariantsCache([]);
+  //     } finally {
+  //       if (!cancelled) setVariantSearchLoading(false);
+  //     }
+  //   };
+  //   load();
+  //   return () => { cancelled = true; };
+  // }, []);
+
+   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setVariantSearchLoading(true);
       try {
         const token = localStorage.getItem("token");
         const res = await axios.get(`${API_URL}/api/ornaments`, {
-          params: { isVariant: true, limit: 500 },
+          params: { limit: 500 },
           headers: { Authorization: `Bearer ${token}` },
         });
         if (cancelled) return;
@@ -212,33 +236,70 @@ setForm((f) => ({
   }, []);
 
   /* ---------- local filtering of cached variants ---------- */
-  useEffect(() => {
-    if (!variantSearchQuery) {
-      setVariantSearchResults([]);
-      return;
-    }
-    const q = variantSearchQuery.trim().toLowerCase();
-    const fields = variantFilterFields;
-    const filtered = allVariantsCache.filter((v) => {
-      try {
-        if (fields.byName && v.name && v.name.toLowerCase().includes(q)) return true;
-        if (fields.bySku && v.sku && String(v.sku).toLowerCase().includes(q)) return true;
-        if (fields.byMetal && v.metal?.metalType && v.metal.metalType.toLowerCase().includes(q)) return true;
-        if (fields.byLabel && v.variantLabel && v.variantLabel.toLowerCase().includes(q)) return true;
-        if (fields.byColor && v.color && v.color.toLowerCase().includes(q)) return true;
-        return false;
-      } catch (e) {
-        return false;
-      }
-    });
-    setVariantSearchResults(filtered.slice(0, 50));
-  }, [variantSearchQuery, allVariantsCache, variantFilterFields]);
+  // useEffect(() => {
+  //   if (!variantSearchQuery) {
+  //     setVariantSearchResults([]);
+  //     return;
+  //   }
+  //   const q = variantSearchQuery.trim().toLowerCase();
+  //   const fields = variantFilterFields;
+  //   const filtered = allVariantsCache.filter((v) => {
+  //     try {
+  //       if (fields.byName && v.name && v.name.toLowerCase().includes(q)) return true;
+  //       if (fields.bySku && v.sku && String(v.sku).toLowerCase().includes(q)) return true;
+  //       if (fields.byMetal && v.metal?.metalType && v.metal.metalType.toLowerCase().includes(q)) return true;
+  //       if (fields.byLabel && v.variantLabel && v.variantLabel.toLowerCase().includes(q)) return true;
+  //       if (fields.byColor && v.color && v.color.toLowerCase().includes(q)) return true;
+  //       return false;
+  //     } catch (e) {
+  //       return false;
+  //     }
+  //   });
+  //   setVariantSearchResults(filtered.slice(0, 50));
+  // }, [variantSearchQuery, allVariantsCache, variantFilterFields]);
 
   /* ---------- form helpers ---------- */
   // const handleFormChange = (e) => {
   //   const { name, value, checked, type } = e.target;
   //   setForm((p) => ({ ...p, [name]: type === "checkbox" ? checked : (type === "number" ? (value === "" ? "" : Number(value)) : value) }));
   // };
+
+ useEffect(() => {
+  if (!variantSearchQuery) {
+    setVariantSearchResults([]);
+    return;
+  }
+
+  const token = localStorage.getItem("token");
+  const controller = new AbortController();
+
+  setVariantSearchLoading(true);
+
+  axios
+    .get(`${API_URL}/api/ornaments`, {
+      params: {
+        search: variantSearchQuery,
+        includeVariants: "true", // IMPORTANT
+        limit: 20,
+      },
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+    .then((res) => {
+      setVariantSearchResults(res.data?.ornaments || []);
+    })
+    .catch((err) => {
+      if (err.name !== "CanceledError") {
+        console.error("Variant search failed:", err);
+        setVariantSearchResults([]);
+      }
+    })
+    .finally(() => {
+      setVariantSearchLoading(false);
+    });
+
+  return () => controller.abort();
+}, [variantSearchQuery]);
 
   const handleFormChange = (e) => {
   const { name, value, checked, type } = e.target;
@@ -877,7 +938,14 @@ console.log("=========================================");
 
                 <div className="max-h-60 overflow-auto bg-white rounded">
                   {variantSearchLoading && <div className="p-2 text-sm text-gray-500">Loading variants...</div>}
-                  {!variantSearchLoading && variantSearchResults.length === 0 && variantSearchQuery && <div className="p-2 text-sm text-gray-500">No matches</div>}
+                  /* {!variantSearchLoading && variantSearchResults.length === 0 && variantSearchQuery && <div className="p-2 text-sm text-gray-500">No matches</div>} */
+                 {!variantSearchLoading &&
+                    variantSearchQuery &&
+                    variantSearchResults.length === 0 && (
+                      <div className="p-2 text-sm text-gray-500">
+                        No matches found
+                      </div>
+                    )}
 
                   {variantSearchResults.map((v) => (
                     <div key={v._id} className="flex items-center justify-between p-2 border-b">
