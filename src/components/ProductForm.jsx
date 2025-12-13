@@ -2225,12 +2225,31 @@ if (!useAutoComposite && prev.price !== "") {
   </div>
 
   {/* Making Charges */}
-<div>
+{/* <div>
   <label className="block text-sm font-medium">Making Charges (INR)</label>
   <input
     type="number"
     value={form.makingCharges}
     onChange={(e) => setField("makingCharges", e.target.value)}
+    className="w-full px-3 py-2 border rounded"
+    placeholder="Enter making charges"
+  />
+</div> */}
+
+     <div>
+  <label className="block text-sm font-medium">
+    Making Charges (INR)
+  </label>
+
+  <input
+    type="text"
+    inputMode="numeric"        // mobile numeric keypad
+    pattern="[0-9]*"            // allows only digits
+    value={form.makingCharges}
+    onChange={(e) => {
+      const value = e.target.value.replace(/\D/g, ""); // remove non-numbers
+      setField("makingCharges", value);
+    }}
     className="w-full px-3 py-2 border rounded"
     placeholder="Enter making charges"
   />
