@@ -1023,7 +1023,7 @@ export default function ProductForm({
     categoryType: "Gold",
     category: "rings",
     subCategory: "",
-    gender: "Unisex",
+    gender: "Women",
     variantLabel: "Metal Type",
     metal: { metalType: "", weight: "", purity: "" },
     price: "",
