@@ -3,14 +3,35 @@ import axios from "axios";
 import EditProductModal from "./EditProductModal";
 import ProductDetailsModal from "./ProductDetailsModal";
 
-const TYPE_OPTIONS = ["Ring", "Necklace", "Chain", "Bracelet", "Earring", "Pendant", "Bangle", "Other"];
+const TYPE_OPTIONS = [
+  "Ring",
+  "Necklace",
+  "Chain",
+  "Bracelet",
+  "Earring",
+  "Pendant",
+  "Bangle",
+  "Other",
+];
 const GENDER_OPTIONS = ["Men", "Women", "Unisex"];
 
 /* Category types mapping to backend categoryType (exact strings expected by backend) */
-const CATEGORY_TYPE_OPTIONS = ["Gold", "Diamond", "Gemstone", "Fashion", "Composite"];
+const CATEGORY_TYPE_OPTIONS = [
+  "Gold",
+  "Diamond",
+  "Gemstone",
+  "Fashion",
+  "Composite",
+];
 
 const SUBCATEGORY_MAP = {
-  Ring: ["Engagement Rings", "Wedding Rings", "Eternity Band", "Cocktail Rings", "Fashion Rings"],
+  Ring: [
+    "Engagement Rings",
+    "Wedding Rings",
+    "Eternity Band",
+    "Cocktail Rings",
+    "Fashion Rings",
+  ],
   Earring: ["Studs", "Hoops", "Drops", "Fashion Earrings"],
   Necklace: ["Tennis", "Pendant", "Fashion Necklace"],
   Bracelet: ["Tennis Bracelet", "Bangles", "Fashion Bracelet"],
@@ -49,17 +70,17 @@ const SUB_MAP = {
   "cocktail rings": "cocktail",
   "fashion rings": "fashion",
 
-  "studs": "studs",
-  "hoops": "hoops",
-  "drops": "drops",
+  studs: "studs",
+  hoops: "hoops",
+  drops: "drops",
   "fashion earrings": "fashion",
 
-  "tennis": "tennis",
-  "pendant": "pendants",
+  tennis: "tennis",
+  pendant: "pendants",
   "fashion necklace": "fashion",
 
   "tennis bracelet": "tennis",
-  "bangles": "bangles",
+  bangles: "bangles",
   "fashion bracelet": "fashion",
 };
 
@@ -112,7 +133,9 @@ export default function ProductList() {
       };
 
       // remove undefined fields so query is clean
-      Object.keys(params).forEach((k) => params[k] === undefined && delete params[k]);
+      Object.keys(params).forEach(
+        (k) => params[k] === undefined && delete params[k]
+      );
 
       const token = localStorage.getItem("token");
       const res = await axios.get(`${API_URL}/api/ornaments/`, {
@@ -135,13 +158,34 @@ export default function ProductList() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [search, categoryType, type, subCategory, gender, minPrice, maxPrice, sort, currency]);
+  }, [
+    search,
+    categoryType,
+    type,
+    subCategory,
+    gender,
+    minPrice,
+    maxPrice,
+    sort,
+    currency,
+  ]);
 
   // Fetch after page or filter change
   useEffect(() => {
     fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, categoryType, type, subCategory, gender, minPrice, maxPrice, sort, currency, page]);
+  }, [
+    search,
+    categoryType,
+    type,
+    subCategory,
+    gender,
+    minPrice,
+    maxPrice,
+    sort,
+    currency,
+    page,
+  ]);
 
   const deleteProduct = async (id) => {
     if (!window.confirm("Delete this product?")) return;
@@ -159,45 +203,36 @@ export default function ProductList() {
   };
 
   // Helper to display currency + amount safely
-// FINAL PRICE (matches backend logic)
-const renderPrice = (item) => {
-  // Backend sends currencySymbol → correct symbol
-  const symbol =
-    item.currencySymbol ||
-    item.currency ||
-    "";
+  // FINAL PRICE (matches backend logic)
+  const renderPrice = (item) => {
+    // Backend sends currencySymbol → correct symbol
+    const symbol = item.currencySymbol || item.currency || "";
 
-  // FINAL price priority → EXACT match to backend design
-  const final =
-    item.totalConvertedPrice ??    // includes making charges, diamonds, stones (correct)
-    item.displayPrice ??           // base converted price
-    item.price ??                  // raw db price (fallback)
-    0;
+    // FINAL price priority → EXACT match to backend design
+    const final =
+      item.totalConvertedPrice ?? // includes making charges, diamonds, stones (correct)
+      item.displayPrice ?? // base converted price
+      item.price ?? // raw db price (fallback)
+      0;
 
-  const n = Number(final);
-  return `${symbol}${Number.isFinite(n) ? n.toLocaleString() : final}`;
-};
+    const n = Number(final);
+    return `${symbol}${Number.isFinite(n) ? n.toLocaleString() : final}`;
+  };
 
+  // ORIGINAL PRICE (strike-through price)
+  const renderOriginalPrice = (item) => {
+    const symbol = item.currencySymbol || item.currency || "";
 
+    const original =
+      item.originalConvertedPrice ?? // backend converted original price
+      item.originalPrice ?? // raw original price
+      null;
 
-// ORIGINAL PRICE (strike-through price)
-const renderOriginalPrice = (item) => {
-  const symbol =
-    item.currencySymbol ||
-    item.currency ||
-    "";
+    if (!original || Number(original) <= 0) return null;
 
-  const original =
-    item.originalConvertedPrice ??  // backend converted original price
-    item.originalPrice ??          // raw original price
-    null;
-
-  if (!original || Number(original) <= 0) return null;
-
-  const n = Number(original);
-  return `${symbol}${Number.isFinite(n) ? n.toLocaleString() : original}`;
-};
-
+    const n = Number(original);
+    return `${symbol}${Number.isFinite(n) ? n.toLocaleString() : original}`;
+  };
 
   return (
     <div>
@@ -205,7 +240,6 @@ const renderOriginalPrice = (item) => {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-6 items-end">
-
         <input
           type="text"
           placeholder="Search..."
@@ -221,18 +255,25 @@ const renderOriginalPrice = (item) => {
         >
           <option value="">All Categories</option>
           {CATEGORY_TYPE_OPTIONS.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>
+              {c}
+            </option>
           ))}
         </select>
 
         <select
           value={type}
-          onChange={(e) => { setType(e.target.value); setSubCategory(""); }}
+          onChange={(e) => {
+            setType(e.target.value);
+            setSubCategory("");
+          }}
           className="border p-2 rounded"
         >
           <option value="">All Types</option>
           {TYPE_OPTIONS.map((t) => (
-            <option key={t} value={t}>{t}</option>
+            <option key={t} value={t}>
+              {t}
+            </option>
           ))}
         </select>
 
@@ -245,30 +286,62 @@ const renderOriginalPrice = (item) => {
           <option value="">All Subcategories</option>
           {type &&
             SUBCATEGORY_MAP[type]?.map((sub) => (
-              <option key={sub} value={sub}>{sub}</option>
+              <option key={sub} value={sub}>
+                {sub}
+              </option>
             ))}
         </select>
 
-        <select value={gender} onChange={(e) => setGender(e.target.value)} className="border p-2 rounded">
+        <select
+          value={gender}
+          onChange={(e) => setGender(e.target.value)}
+          className="border p-2 rounded"
+        >
           <option value="">All Genders</option>
           {GENDER_OPTIONS.map((g) => (
-            <option key={g} value={g}>{g}</option>
+            <option key={g} value={g}>
+              {g}
+            </option>
           ))}
         </select>
 
-        <input type="number" placeholder="Min" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} className="border p-2 rounded w-24" />
-        <input type="number" placeholder="Max" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} className="border p-2 rounded w-24" />
+        <input
+          type="number"
+          placeholder="Min"
+          value={minPrice}
+          onChange={(e) => setMinPrice(e.target.value)}
+          className="border p-2 rounded w-24"
+        />
+        <input
+          type="number"
+          placeholder="Max"
+          value={maxPrice}
+          onChange={(e) => setMaxPrice(e.target.value)}
+          className="border p-2 rounded w-24"
+        />
 
-        <select value={sort} onChange={(e) => setSort(e.target.value)} className="border p-2 rounded">
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value)}
+          className="border p-2 rounded"
+        >
           <option value="">Sort By</option>
           {SORT_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
           ))}
         </select>
 
-        <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="border p-2 rounded">
+        <select
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value)}
+          className="border p-2 rounded"
+        >
           {CURRENCY_OPTIONS.map((c) => (
-            <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
+            <option key={c.code} value={c.code}>
+              {c.symbol} {c.code}
+            </option>
           ))}
         </select>
       </div>
@@ -299,34 +372,45 @@ const renderOriginalPrice = (item) => {
                   <span className="text-lg font-semibold">
                     {renderPrice(p)}
                   </span>
-{
-  Number(p.originalConvertedPrice ?? p.originalPrice ?? 0) >
-    Number(p.totalConvertedPrice ?? p.displayPrice ?? p.price ?? 0) && (
-    <span className="ml-2 line-through text-sm text-gray-500">
-      {renderOriginalPrice(p)}
-    </span>
-  )
-}
-
-
-                  {p.discount > 0 && (
-                    <span className="ml-2 text-red-500">({p.discount}% OFF)</span>
+                  {Number(p.originalConvertedPrice ?? p.originalPrice ?? 0) >
+                    Number(
+                      p.totalConvertedPrice ?? p.displayPrice ?? p.price ?? 0
+                    ) && (
+                    <span className="ml-2 line-through text-sm text-gray-500">
+                      {renderOriginalPrice(p)}
+                    </span>
                   )}
+
+                  {/* {p.discount > 0 && (
+                    <span className="ml-2 text-red-500">
+                      ({p.discount}% OFF)
+                    </span>
+                  )} */}
                 </div>
 
-                <p className="text-sm text-gray-600 mt-1">{p.category} | {p.type || p.category}</p>
-                <p className="mt-2 text-gray-700 line-clamp-2">{p.description}</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  {p.category} | {p.type || p.category}
+                </p>
+                <p className="mt-2 text-gray-700 line-clamp-2">
+                  {p.description}
+                </p>
 
                 <div className="flex justify-between mt-4">
                   <button
-                    onClick={(e) => { e.stopPropagation(); setEditingProduct(p); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingProduct(p);
+                    }}
                     className="px-3 py-1 bg-yellow-200 rounded hover:bg-yellow-300"
                   >
                     Edit
                   </button>
 
                   <button
-                    onClick={(e) => { e.stopPropagation(); deleteProduct(p._id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteProduct(p._id);
+                    }}
                     className="px-3 py-1 bg-red-500 text-white rounded"
                   >
                     Delete
@@ -341,19 +425,33 @@ const renderOriginalPrice = (item) => {
       {/* Pagination */}
       {!loading && totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-6">
-          <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-2 border rounded">◀ Prev</button>
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+            className="px-3 py-2 border rounded"
+          >
+            ◀ Prev
+          </button>
 
           {Array.from({ length: totalPages }).map((_, i) => (
             <button
               key={i}
               onClick={() => setPage(i + 1)}
-              className={`px-3 py-2 border rounded ${page === i + 1 ? "bg-yellow-400 text-white" : ""}`}
+              className={`px-3 py-2 border rounded ${
+                page === i + 1 ? "bg-yellow-400 text-white" : ""
+              }`}
             >
               {i + 1}
             </button>
           ))}
 
-          <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="px-3 py-2 border rounded">Next ▶</button>
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage(page + 1)}
+            className="px-3 py-2 border rounded"
+          >
+            Next ▶
+          </button>
         </div>
       )}
 
