@@ -330,7 +330,7 @@ setForm((f) => ({
   const removeStone = (idx) => setStones((s) => s.filter((_, i) => i !== idx));
 
   const updateMainDiamond = (k, v) => setDiamondDetails((d) => ({ ...d, [k]: v }));
-  const addSideDiamond = () => setSideDiamondDetails((s) => [...s, { carat: 0, count: 1, color: "", clarity: "", cut: "", pricePerCarat: 0, useAuto: true }]);
+  const addSideDiamond = () => setSideDiamondDetails((s) => [...s, { carat: 0, count: 1, color: "E-F", clarity: "VVS-VS", cut: "", pricePerCarat: 0, useAuto: true }]);
   const updateSideDiamond = (idx, k, v) => setSideDiamondDetails((s) => s.map((it, i) => (i === idx ? { ...it, [k]: v } : it)));
   const removeSideDiamond = (idx) => setSideDiamondDetails((s) => s.filter((_, i) => i !== idx));
 
