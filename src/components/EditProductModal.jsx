@@ -63,9 +63,11 @@ export default function EditProductModal({ product, onClose, onSave }) {
 
   const [variantList, setVariantList] = useState([]);
   const [existingImages, setExistingImages] = useState([]);
+  const [allImages, setAllImages] = useState([]); // Unified list: [cover, ...gallery]
   const [newImagesFiles, setNewImagesFiles] = useState([]);
   const [imagesToRemove, setImagesToRemove] = useState([]);
   const [imagesToAdd, setImagesToAdd] = useState([]);
+  const [draggedImageIndex, setDraggedImageIndex] = useState(null);
 
   const [coverFile, setCoverFile] = useState(null);
   const [model3DFile, setModel3DFile] = useState(null);
@@ -151,6 +153,11 @@ setForm((f) => ({
     setVariantList(variantsArr);
 
     setExistingImages(product.images || []);
+    
+    // Create unified image list: [cover, ...gallery]
+    const unifiedImages = [product.coverImage, ...(product.images || [])].filter(Boolean);
+    setAllImages(unifiedImages);
+    
     setNewImagesFiles([]);
     setImagesToRemove([]);
     setImagesToAdd([]);
@@ -347,6 +354,45 @@ setForm((f) => ({
   const addImageUrlToAdd = (url) => { if (!url) return; setImagesToAdd((p) => [...p, url]); };
   const onModel3DChange = (e) => setModel3DFile(e.target.files?.[0] || null);
   const onVideoChange = (e) => setVideoFile(e.target.files?.[0] || null);
+
+  // Image reordering handlers for unified list
+  const handleDragStart = (e, index) => {
+    setDraggedImageIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+    if (draggedImageIndex === null || draggedImageIndex === dropIndex) return;
+
+    const newImages = [...allImages];
+    const draggedImage = newImages[draggedImageIndex];
+    
+    // Remove dragged image from its original position
+    newImages.splice(draggedImageIndex, 1);
+    
+    // Insert at new position
+    const insertIndex = draggedImageIndex < dropIndex ? dropIndex - 1 : dropIndex;
+    newImages.splice(insertIndex, 0, draggedImage);
+    
+    setAllImages(newImages);
+    setDraggedImageIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedImageIndex(null);
+  };
+
+  // Remove image from unified list
+  const removeImageFromAll = (url) => {
+    setAllImages(prev => prev.filter(img => img !== url));
+    setImagesToRemove(prev => prev.includes(url) ? prev : [...prev, url]);
+  };
 
   // variant linking helpers (same as before)
   const addVariantLinkFromInput = (inputValue) => {
@@ -560,6 +606,11 @@ if (form.sideDiamondTotal === "" || form.sideDiamondTotal === null) {
 
       if (imagesToAdd.length) fd.append("addImage", JSON.stringify(imagesToAdd));
       if (imagesToRemove.length) fd.append("removeImage", JSON.stringify(imagesToRemove));
+      
+      // Send unified reordered images (cover + gallery)
+      if (allImages.length > 0) {
+        fd.append("reorderAllImages", JSON.stringify(allImages));
+      }
 
       console.log("========== DEBUG FORM PAYLOAD ==========");
 console.log("mainDiamondTotal (raw):", form.mainDiamondTotal, "type:", typeof form.mainDiamondTotal);
@@ -624,6 +675,12 @@ console.log("=========================================");
             <select name="categoryType" value={form.categoryType || ""} onChange={handleFormChange} className="border p-2 rounded">
               <option>Gold</option><option>Diamond</option><option>Gemstone</option><option>Fashion</option><option>Composite</option>
             </select>
+           </div>
+
+           <div className="flex flex-col md:col-span-2">
+
+              <label className="text-sm font-semibold text-gray-700 mb-1">Description</label>
+            <textarea name="description" value={form.description || ""} onChange={handleFormChange} className="border p-2 rounded" placeholder="Product description" rows="3" />
            </div>
 
            <div className="flex flex-col">
@@ -981,31 +1038,62 @@ console.log("=========================================");
           )}
 
           {/* MEDIA */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium">Replace Cover Image</label>
-              <input type="file" accept="image/*" onChange={onCoverFileChange} />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium">Gallery (replace)</label>
-              <input type="file" accept="image/*" multiple onChange={onNewImagesChange} />
-              <div className="mt-2 flex gap-2 overflow-auto">
-                {existingImages.map((url) => (
-                  <div key={url} className="relative">
-                    <img src={url} alt="exist" className="w-20 h-20 object-cover rounded" />
-                    <label className="absolute top-0 right-0 bg-white p-1 rounded">
-                      <input type="checkbox" checked={imagesToRemove.includes(url)} onChange={() => markImageToRemove(url)} />
-                    </label>
+              <label className="block text-sm font-medium mb-2">All Images (Cover + Gallery)</label>
+              <p className="text-sm text-gray-600 mb-2">First image will be the cover. Drag to reorder:</p>
+              <div className="grid grid-cols-3 gap-2">
+                {allImages.map((url, index) => (
+                  <div 
+                    key={url} 
+                    className={`relative cursor-move ${draggedImageIndex === index ? 'opacity-50' : ''}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, index)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <img src={url} alt="product" className="w-full h-20 object-cover rounded border-2 border-gray-300" />
+                    <div className={`absolute top-0 left-0 text-white text-xs px-1 rounded ${index === 0 ? 'bg-red-500' : 'bg-blue-500'}`}>
+                      {index === 0 ? 'COVER' : index}
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => removeImageFromAll(url)} 
+                      className="absolute top-0 right-0 bg-black/70 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center"
+                    >
+                      ×
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs text-center py-1">
+                      {index === 0 ? 'Cover Image' : 'Gallery'}
+                    </div>
                   </div>
                 ))}
-                {newImagesFiles.map((f, i) => (<img key={`new-${i}`} src={URL.createObjectURL(f)} className="w-20 h-20 rounded object-cover" alt="new" />))}
+                {newImagesFiles.map((f, i) => (
+                  <div key={`new-${i}`} className="relative">
+                    <img src={URL.createObjectURL(f)} className="w-full h-20 rounded object-cover border-2 border-green-300" alt="new" />
+                    <div className="absolute top-0 left-0 bg-green-500 text-white text-xs px-1 rounded">NEW</div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-3">
+                <label className="block text-sm font-medium">Add New Images</label>
+                <input type="file" accept="image/*" multiple onChange={onNewImagesChange} className="mt-1" />
               </div>
 
               <div className="mt-2">
-                <input id="imgUrlInput" placeholder="Add image URL to append" className="border p-2 rounded w-full" />
+                <input id="imgUrlInput" placeholder="Add image URL" className="border p-2 rounded w-full" />
                 <div className="flex gap-2 mt-2">
-                  <button type="button" onClick={() => { const el = document.getElementById("imgUrlInput"); addImageUrlToAdd(el?.value?.trim()); if (el) el.value = ""; }} className="px-3 py-1 bg-green-500 text-white rounded">Append</button>
+                  <button type="button" onClick={() => { 
+                    const el = document.getElementById("imgUrlInput"); 
+                    const url = el?.value?.trim();
+                    if (url) {
+                      setAllImages(prev => [...prev, url]);
+                      addImageUrlToAdd(url);
+                      el.value = "";
+                    }
+                  }} className="px-3 py-1 bg-green-500 text-white rounded">Add URL</button>
                 </div>
               </div>
             </div>

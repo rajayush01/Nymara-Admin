@@ -1060,6 +1060,8 @@ sideDiamondTotal: "",
   const [coverPreview, setCoverPreview] = useState(null);
 
   const [imagesList, setImagesList] = useState([]); // items: { src, isFile, file }
+  const [allImagesList, setAllImagesList] = useState([]); // Unified: cover + gallery
+  const [draggedImageIndex, setDraggedImageIndex] = useState(null);
   const [model3DFile, setModel3DFile] = useState(null);
   const [existingModel3DUrl, setExistingModel3DUrl] = useState(null);
   const [videoFile, setVideoFile] = useState(null);
@@ -1143,6 +1145,13 @@ sideDiamondTotal: "",
 
     const initialImages = (initial.images || []).map((u) => ({ src: u, isFile: false }));
     const coverUrl = initial.coverImage || null;
+    
+    // Create unified list: [cover, ...gallery]
+    const unifiedImages = [];
+    if (coverUrl) unifiedImages.push({ src: coverUrl, isFile: false, isCover: true });
+    unifiedImages.push(...initialImages);
+    
+    setAllImagesList(unifiedImages);
     const modelUrl = initial.model3D || null;
     const videoUrl = initial.videoUrl || null;
 
@@ -1244,6 +1253,67 @@ useEffect(() => {
     });
   };
 
+  // Image reordering handlers for unified list
+  const handleImageDragStart = (e, index) => {
+    setDraggedImageIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleImageDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleImageDrop = (e, dropIndex) => {
+    e.preventDefault();
+    if (draggedImageIndex === null || draggedImageIndex === dropIndex) return;
+
+    const newImages = [...allImagesList];
+    const draggedImage = newImages[draggedImageIndex];
+    
+    // Remove dragged image from its original position
+    newImages.splice(draggedImageIndex, 1);
+    
+    // Insert at new position
+    const insertIndex = draggedImageIndex < dropIndex ? dropIndex - 1 : dropIndex;
+    newImages.splice(insertIndex, 0, draggedImage);
+    
+    // Update cover flag - first image is always cover
+    newImages.forEach((img, idx) => {
+      img.isCover = idx === 0;
+    });
+    
+    setAllImagesList(newImages);
+    setDraggedImageIndex(null);
+  };
+
+  const handleImageDragEnd = () => {
+    setDraggedImageIndex(null);
+  };
+
+  // Add new images to unified list
+  const onAddAllImages = (files) => {
+    const list = Array.from(files || []);
+    const mapped = list.map((f) => ({ src: URL.createObjectURL(f), isFile: true, file: f }));
+    setAllImagesList((p) => [...p, ...mapped]);
+  };
+
+  // Remove image from unified list
+  const onRemoveAllImageAt = (index) => {
+    setAllImagesList((p) => {
+      const copy = [...p];
+      const [removed] = copy.splice(index, 1);
+      if (removed && removed.isFile && removed.src) URL.revokeObjectURL(removed.src);
+      
+      // Update cover flag - first image is always cover
+      copy.forEach((img, idx) => {
+        img.isCover = idx === 0;
+      });
+      
+      return copy;
+    });
+  };
+
   const onSetCoverFile = (file) => {
     setCoverImageFile(file || null);
     if (file) setExistingCoverUrl(null);
@@ -1303,6 +1373,14 @@ if (k === "mainDiamondTotal" || k === "sideDiamondTotal") {
     if (existingCoverUrl) fd.append("existingCover", existingCoverUrl);
     const existingImageUrls = imagesList.filter((it) => !it.isFile).map((it) => it.src);
     fd.append("existingImages", JSON.stringify(existingImageUrls || []));
+    
+    // Send unified reordered images (cover + gallery)
+    if (allImagesList.length > 0) {
+      const allUrls = allImagesList.filter(img => !img.isFile).map(img => img.src);
+      if (allUrls.length > 0) {
+        fd.append("reorderAllImages", JSON.stringify(allUrls));
+      }
+    }
 
     if (existingModel3DUrl) fd.append("existingModel3D", existingModel3DUrl);
     if (existingVideoUrl) fd.append("existingVideo", existingVideoUrl);
@@ -1356,7 +1434,7 @@ if (k === "mainDiamondTotal" || k === "sideDiamondTotal") {
       const payloadForm = { ...form, isVariant: false };
       delete payloadForm.variants; // don't send map on initial create
 
-      const imagesFiles = imagesList.filter((it) => it.isFile).map((it) => it.file);
+      const imagesFiles = allImagesList.filter((it) => it.isFile).map((it) => it.file);
       const payloadMedia = {
         coverFile: coverImageFile,
         imagesFiles,
@@ -1387,7 +1465,7 @@ if (k === "mainDiamondTotal" || k === "sideDiamondTotal") {
       const token = localStorage.getItem("token");
       const payloadForm = { ...form, isVariant: false };
       // keep variants map when saving base
-      const imagesFiles = imagesList.filter((it) => it.isFile).map((it) => it.file);
+      const imagesFiles = allImagesList.filter((it) => it.isFile).map((it) => it.file);
       const payloadMedia = { coverFile: coverImageFile, imagesFiles, model3DFile, videoFile };
 
       // If form._id present, use edit endpoint; else add
@@ -1400,7 +1478,16 @@ if (k === "mainDiamondTotal" || k === "sideDiamondTotal") {
           else fd.append(k, String(v));
         });
         if (existingCoverUrl) fd.append("existingCover", existingCoverUrl);
-        fd.append("existingImages", JSON.stringify(imagesList.filter((it) => !it.isFile).map((it) => it.src)));
+        const orderedImageUrls = imagesList.filter((it) => !it.isFile).map((it) => it.src);
+        fd.append("existingImages", JSON.stringify(orderedImageUrls));
+        
+        // Send unified reordered images (cover + gallery)
+        if (allImagesList.length > 0) {
+          const allUrls = allImagesList.filter(img => !img.isFile).map(img => img.src);
+          if (allUrls.length > 0) {
+            fd.append("reorderAllImages", JSON.stringify(allUrls));
+          }
+        }
         if (existingModel3DUrl) fd.append("existingModel3D", existingModel3DUrl);
         if (existingVideoUrl) fd.append("existingVideo", existingVideoUrl);
         if (payloadMedia.coverFile) fd.append("coverImage", payloadMedia.coverFile);
@@ -1801,20 +1888,35 @@ if (!useAutoComposite && prev.price !== "") {
                 </div>
               </div>
 
-              {/* gallery */}
+              {/* Unified Images (Cover + Gallery) */}
               <div className="border p-3 rounded">
-                <label className="block text-sm font-medium mb-2">Gallery Images</label>
+                <label className="block text-sm font-medium mb-2">All Images (Cover + Gallery)</label>
+                <p className="text-sm text-gray-600 mb-2">First image will be the cover. Drag to reorder:</p>
                 <div className="grid grid-cols-3 gap-2 mt-2">
-                  {imagesList.map((it, i) => (
-                    <div key={i} className="relative">
-                      <img src={it.src} alt={`img-${i}`} className="h-24 w-full object-cover rounded" />
-                      <button onClick={() => onRemoveGalleryAt(i)} className="absolute right-1 top-1 bg-black/50 text-white px-1 rounded text-xs">X</button>
+                  {allImagesList.map((it, i) => (
+                    <div 
+                      key={i} 
+                      className={`relative cursor-move ${draggedImageIndex === i ? 'opacity-50' : ''}`}
+                      draggable
+                      onDragStart={(e) => handleImageDragStart(e, i)}
+                      onDragOver={handleImageDragOver}
+                      onDrop={(e) => handleImageDrop(e, i)}
+                      onDragEnd={handleImageDragEnd}
+                    >
+                      <img src={it.src} alt={`img-${i}`} className="h-24 w-full object-cover rounded border-2 border-gray-300" />
+                      <div className={`absolute top-0 left-0 text-white text-xs px-1 rounded ${i === 0 ? 'bg-red-500' : 'bg-blue-500'}`}>
+                        {i === 0 ? 'COVER' : i}
+                      </div>
+                      <button onClick={() => onRemoveAllImageAt(i)} className="absolute right-1 top-1 bg-black/50 text-white px-1 rounded text-xs">X</button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs text-center py-1">
+                        {i === 0 ? 'Cover Image' : 'Gallery'}
+                      </div>
                     </div>
                   ))}
                 </div>
 
                 <div className="mt-2">
-                  <input type="file" accept="image/*" multiple onChange={(e) => onAddGalleryFiles(e.target.files)} />
+                  <input type="file" accept="image/*" multiple onChange={(e) => onAddAllImages(e.target.files)} />
                 </div>
               </div>
 
